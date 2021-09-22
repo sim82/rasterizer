@@ -28,24 +28,25 @@ impl Slope for SlopeData {
     }
 }
 
-type Point = [i32; 5];
+// type Point = [i32; 5];
+type Point = (i32, i32, i32, i32, i32);
 
-fn draw_polygon<P>(p0: Point, p1: Point, p2: Point, mut plot: P)
+fn draw_polygon<F>(p0: Point, p1: Point, p2: Point, mut fragment: F)
 where
-    P: FnMut(i32, i32, i32, i32, i32),
+    F: FnMut(i32, i32, i32, i32, i32),
 {
     rasterize_triangle(
         p0,
         p1,
         p2,
-        |p| (p[0], p[1]),
+        |p| (p.0, p.1),
         // slope generator
         |from, to, num_steps| {
             let result = [
-                SlopeData::new(from[0], to[0], num_steps),
-                SlopeData::new(from[2], to[2], num_steps),
-                SlopeData::new(from[3], to[3], num_steps),
-                SlopeData::new(from[4], to[4], num_steps),
+                SlopeData::new(from.0, to.0, num_steps),
+                SlopeData::new(from.2, to.2, num_steps),
+                SlopeData::new(from.3, to.3, num_steps),
+                SlopeData::new(from.4, to.4, num_steps),
             ];
             result
         },
@@ -73,7 +74,7 @@ where
                 ),
             ];
             for x in xstart..xend {
-                plot(
+                fragment(
                     x,
                     y,
                     props[0].get() as i32,
@@ -158,9 +159,9 @@ fn main() {
         for (p0, p1, p2) in triangles.iter().cloned() {
             color = (color << 1) | (color >> (32 - 1));
 
-            let p0 = [p0[0], p0[1], 0xff, 0, 0];
-            let p1 = [p1[0], p1[1], 0, 0xff, 0];
-            let p2 = [p2[0], p2[1], 0, 0, 0xff];
+            let p0 = (p0[0], p0[1], 0xff, 0, 0);
+            let p1 = (p1[0], p1[1], 0, 0xff, 0);
+            let p2 = (p2[0], p2[1], 0, 0, 0xff);
 
             draw_polygon(p0, p1, p2, |x, y, r, g, b| {
                 let x = x as u32;
