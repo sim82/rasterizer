@@ -9,7 +9,15 @@ pub struct SlopeData {
     begin: f32,
     step: f32,
 }
-
+impl SlopeData {
+    fn new(begin: i32, end: i32, num_steps: i32) -> SlopeData {
+        let inv_step = 1.0 / num_steps as f32;
+        SlopeData {
+            begin: begin as f32,
+            step: (end - begin) as f32 * inv_step,
+        }
+    }
+}
 impl Slope for SlopeData {
     fn get(&self) -> f32 {
         self.begin
@@ -29,15 +37,7 @@ where
         p1,
         p2,
         |p| (p[0], p[1]),
-        |from, to, num_steps| {
-            let begin = from[0] as f32;
-            let end = to[0] as f32;
-            let inv_step = 1.0 / num_steps as f32;
-            SlopeData {
-                begin,
-                step: (end - begin) * inv_step,
-            }
-        },
+        |from, to, num_steps| SlopeData::new(from[0], to[0], num_steps),
         |y, borders| {
             let xstart = borders[0].get() as i32;
             let xend = borders[1].get() as i32;
