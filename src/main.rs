@@ -1,6 +1,12 @@
 #![feature(step_trait)]
-use std::{fs::File, io::BufWriter, iter::Step, path::Path};
+use std::{fmt::Debug, fs::File, io::BufWriter, iter::Step, path::Path};
 
+use sdl2::{
+    event::Event,
+    keyboard::Keycode,
+    pixels::{Color, PixelFormatEnum},
+    rect::Point,
+};
 // pub trait Number:
 //     PartialOrd + Copy + Sub<Output = Self> + Mul<Output = Self> + Into<f32> + Into<isize> + Step
 // {
@@ -11,6 +17,7 @@ pub trait Point2d<T> {
     fn get_x(&self) -> T;
     fn get_y(&self) -> T;
 }
+#[derive(Debug)]
 pub struct SlopeData {
     begin: f32,
     step: f32,
@@ -26,6 +33,7 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
 ) where
     T: num_traits::PrimInt + Step,
     G: Fn(&P) -> (T, T),
+    S: Debug,
     M: Fn(&P, &P, T) -> S,
     D: FnMut(T, &mut [&mut S; 2]),
 {
@@ -62,6 +70,7 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
         } else {
             [&mut short_side, &mut long_side]
         };
+        println!("1: {:?} {:?}", sides[0], sides[1]);
         for y in y0..y1 {
             draw_scanline(y, &mut sides);
         }
@@ -74,6 +83,8 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
         } else {
             [&mut short_side, &mut long_side]
         };
+        println!("2: {:?} {:?}", sides[0], sides[1]);
+
         for y in y1..y2 {
             draw_scanline(y, &mut sides);
         }
@@ -113,24 +124,86 @@ where
 fn main() {
     const W: u32 = 320;
     const H: u32 = 240;
-    let mut pixels = [20u8; (W * H * 3) as usize];
+    let mut pixels = [20u8; (W * H * 4) as usize];
 
-    draw_polygon([10, 10], [20, 100], [90, 50], |x, y| {
-        let x = x as u32;
-        let y = y as u32;
-        println!("plot {} {}", x, y);
-        let pixel_offs = ((x + W * y) * 3) as usize;
-        pixels[pixel_offs] = 0xff;
-    });
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
+    let window = video_subsystem
+        .window("rust-sdl2 demo: Video", W, H)
+        .position_centered()
+        .build()
+        .map_err(|e| e.to_string())
+        .unwrap();
 
-    let path = Path::new("image.png");
-    let file = File::create(path).unwrap();
-    let ref mut w = BufWriter::new(file);
+    let mut canvas = window
+        .into_canvas()
+        .software()
+        .build()
+        .map_err(|e| e.to_string())
+        .unwrap();
 
-    let mut encoder = png::Encoder::new(w, W, H); // Width is 2 pixels and height is 1.
-    encoder.set_color(png::ColorType::Rgb);
-    encoder.set_depth(png::BitDepth::Eight);
-    let mut writer = encoder.write_header().unwrap();
+    let texture_creator = canvas.texture_creator();
+    let mut texture = texture_creator
+        .create_texture(
+            PixelFormatEnum::ABGR8888,
+            sdl2::render::TextureAccess::Streaming,
+            W,
+            H,
+        )
+        .unwrap();
 
-    writer.write_image_data(&pixels).unwrap();
+    'mainloop: loop {
+        for event in sdl_context.event_pump().unwrap().poll_iter() {
+            match event {
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Option::Some(Keycode::Escape),
+                    ..
+                } => break 'mainloop,
+                _ => {}
+            }
+        }
+
+        // draw_polygon([10, 10], [20, 100], [90, 50], |x, y| {
+        //     let x = x as u32;
+        //     let y = y as u32;
+        //     println!("plot {} {}", x, y);
+        //     let pixel_offs = ((x + W * y) * 4) as usize;
+        //     pixels[pixel_offs] = 0xff;
+        //     // canvas.set_draw_color(Color::RGB(0xff, 0, 0));
+        //     // canvas.draw_point(Point::new(x, y)).unwrap();
+        // });
+        let triangles = [
+            ([10, 10], [20, 100], [90, 50]),
+            ([20, 10], [20, 100], [90, 50]),
+        ];
+        let mut color = 0x3b0103a5u32;
+        let mut blank = 0xffffffu32;
+        let mut duplicate = 0xffaa55u32;
+        let mut pixels = [blank; (W * H) as usize];
+
+        for (p0, p1, p2) in triangles {
+            color = (color << 1) | (color >> (32 - 1));
+            draw_polygon(p0, p1, p2, |x, y| {
+                let x = x as u32;
+                let y = y as u32;
+                let pi = (y * W + x) as usize;
+                if pixels[pi] != blank {
+                    pixels[pi] = duplicate;
+                } else {
+                    pixels[pi] = color & 0xffffff;
+                }
+            });
+        }
+
+        texture
+            .update(
+                None,
+                unsafe { std::mem::transmute::<&[u32], &[u8]>(&pixels) },
+                4 * W as usize,
+            )
+            .unwrap();
+        canvas.copy(&texture, None, None).unwrap();
+        canvas.present();
+    }
 }
