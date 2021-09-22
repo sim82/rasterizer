@@ -1,5 +1,5 @@
 #![feature(step_trait)]
-use std::{fmt::Debug, fs::File, io::BufWriter, iter::Step, path::Path};
+use std::{collections::VecDeque, fmt::Debug, fs::File, io::BufWriter, iter::Step, path::Path};
 
 use sdl2::{
     event::Event,
@@ -23,6 +23,21 @@ pub struct SlopeData {
     step: f32,
 }
 
+pub trait Slope {
+    fn get(&self) -> f32;
+    fn advance(&mut self);
+}
+
+impl Slope for SlopeData {
+    fn get(&self) -> f32 {
+        self.begin
+    }
+
+    fn advance(&mut self) {
+        self.begin += self.step;
+    }
+}
+
 pub fn rasterize_triangle<T, P, G, S, M, D>(
     mut p0: P,
     mut p1: P,
@@ -33,7 +48,7 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
 ) where
     T: num_traits::PrimInt + Step,
     G: Fn(&P) -> (T, T),
-    S: Debug,
+    S: Slope + Debug,
     M: Fn(&P, &P, T) -> S,
     D: FnMut(T, &mut [&mut S; 2]),
 {
@@ -109,14 +124,14 @@ where
             }
         },
         |y, borders| {
-            let xstart = borders[0].begin as i32;
-            let xend = borders[1].begin as i32;
+            let xstart = borders[0].get() as i32;
+            let xend = borders[1].get() as i32;
 
             for x in xstart..xend {
                 plot(x, y);
             }
-            borders[0].begin += borders[0].step;
-            borders[1].begin += borders[1].step;
+            borders[0].advance();
+            borders[1].advance();
         },
     )
 }
