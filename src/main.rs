@@ -70,7 +70,7 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
         } else {
             [&mut short_side, &mut long_side]
         };
-        println!("1: {:?} {:?}", sides[0], sides[1]);
+        // println!("1: {:?} {:?}", sides[0], sides[1]);
         for y in y0..y1 {
             draw_scanline(y, &mut sides);
         }
@@ -83,7 +83,7 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
         } else {
             [&mut short_side, &mut long_side]
         };
-        println!("2: {:?} {:?}", sides[0], sides[1]);
+        // println!("2: {:?} {:?}", sides[0], sides[1]);
 
         for y in y1..y2 {
             draw_scanline(y, &mut sides);
@@ -152,6 +152,11 @@ fn main() {
         )
         .unwrap();
 
+    let mut triangles = vec![
+        ([10, 10], [20, 100], [90, 50]),
+        ([20, 10], [20, 100], [90, 50]),
+    ];
+    let mut new_triangle = VecDeque::new();
     'mainloop: loop {
         for event in sdl_context.event_pump().unwrap().poll_iter() {
             match event {
@@ -160,38 +165,32 @@ fn main() {
                     keycode: Option::Some(Keycode::Escape),
                     ..
                 } => break 'mainloop,
+                Event::MouseButtonDown { x, y, .. } => {
+                    new_triangle.push_back([x, y]);
+                    if new_triangle.len() == 3 {
+                        triangles.push((new_triangle[0], new_triangle[1], new_triangle[2]));
+                        new_triangle.pop_front();
+                    }
+                }
                 _ => {}
             }
         }
 
-        // draw_polygon([10, 10], [20, 100], [90, 50], |x, y| {
-        //     let x = x as u32;
-        //     let y = y as u32;
-        //     println!("plot {} {}", x, y);
-        //     let pixel_offs = ((x + W * y) * 4) as usize;
-        //     pixels[pixel_offs] = 0xff;
-        //     // canvas.set_draw_color(Color::RGB(0xff, 0, 0));
-        //     // canvas.draw_point(Point::new(x, y)).unwrap();
-        // });
-        let triangles = [
-            ([10, 10], [20, 100], [90, 50]),
-            ([20, 10], [20, 100], [90, 50]),
-        ];
         let mut color = 0x3b0103a5u32;
-        let mut blank = 0xffffffu32;
-        let mut duplicate = 0xffaa55u32;
+        let blank = 0xffffffu32;
+        let duplicate = 0xffaa55u32;
         let mut pixels = [blank; (W * H) as usize];
 
-        for (p0, p1, p2) in triangles {
+        for (p0, p1, p2) in triangles.iter().cloned() {
             color = (color << 1) | (color >> (32 - 1));
             draw_polygon(p0, p1, p2, |x, y| {
                 let x = x as u32;
                 let y = y as u32;
-                let pi = (y * W + x) as usize;
-                if pixels[pi] != blank {
-                    pixels[pi] = duplicate;
+                let pixel = &mut pixels[(y * W + x) as usize];
+                if *pixel != blank {
+                    *pixel = duplicate;
                 } else {
-                    pixels[pi] = color & 0xffffff;
+                    *pixel = color & 0xffffff;
                 }
             });
         }
