@@ -23,7 +23,7 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
     G: Fn(&P) -> (T, T),
     S: Debug,
     M: Fn(&P, &P, T) -> S,
-    D: FnMut(T, &mut [&mut S; 2]),
+    D: FnMut(T, &mut S, &mut S),
 {
     let (mut x0, mut y0) = get_xy(&p0);
     let (mut x1, mut y1) = get_xy(&p1);
@@ -53,28 +53,26 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
 
     if y0 < y1 {
         let mut short_side = make_slope(&p0, &p1, y1 - y0);
-        let mut sides = if shortside_right {
-            [&mut long_side, &mut short_side]
-        } else {
-            [&mut short_side, &mut long_side]
-        };
-        // println!("1: {:?} {:?}", sides[0], sides[1]);
+        let mut left = &mut short_side;
+        let mut right = &mut long_side;
+        if shortside_right {
+            // important: this swapps the references in left/right, *not* the actual slopes!
+            std::mem::swap(&mut left, &mut right);
+        }
         for y in y0..y1 {
-            draw_scanline(y, &mut sides);
+            draw_scanline(y, left, right);
         }
     }
     if y1 < y2 {
         let mut short_side = make_slope(&p1, &p2, y2 - y1);
-
-        let mut sides = if shortside_right {
-            [&mut long_side, &mut short_side]
-        } else {
-            [&mut short_side, &mut long_side]
-        };
-        // println!("2: {:?} {:?}", sides[0], sides[1]);
-
+        let mut left = &mut short_side;
+        let mut right = &mut long_side;
+        if shortside_right {
+            // important: this swapps the references in left/right, *not* the actual slopes!
+            std::mem::swap(&mut left, &mut right);
+        }
         for y in y1..y2 {
-            draw_scanline(y, &mut sides);
+            draw_scanline(y, left, right);
         }
     }
 }

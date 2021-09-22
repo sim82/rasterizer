@@ -51,27 +51,15 @@ where
             result
         },
         //scanline function
-        |y, borders| {
-            let xstart = borders[0][0].get() as i32;
-            let xend = borders[1][0].get() as i32;
+        |y, left, right| {
+            let xstart = left[0].get() as i32;
+            let xend = right[0].get() as i32;
 
             let num_steps = xend - xstart;
             let mut props = [
-                SlopeData::new(
-                    borders[0][1].get() as i32,
-                    borders[1][1].get() as i32,
-                    num_steps,
-                ),
-                SlopeData::new(
-                    borders[0][2].get() as i32,
-                    borders[1][2].get() as i32,
-                    num_steps,
-                ),
-                SlopeData::new(
-                    borders[0][3].get() as i32,
-                    borders[1][3].get() as i32,
-                    num_steps,
-                ),
+                SlopeData::new(left[1].get() as i32, right[1].get() as i32, num_steps),
+                SlopeData::new(left[2].get() as i32, right[2].get() as i32, num_steps),
+                SlopeData::new(left[3].get() as i32, right[3].get() as i32, num_steps),
             ];
             for x in xstart..xend {
                 fragment(
@@ -85,10 +73,10 @@ where
                     prop.advance();
                 }
             }
-            for border in borders[0].iter_mut() {
+            for border in left.iter_mut() {
                 border.advance();
             }
-            for border in borders[1].iter_mut() {
+            for border in right.iter_mut() {
                 border.advance();
             }
         },
