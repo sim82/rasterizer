@@ -28,25 +28,68 @@ impl Slope for SlopeData {
     }
 }
 
-fn draw_polygon<P>(p0: [i32; 2], p1: [i32; 2], p2: [i32; 2], mut plot: P)
+type Point = [i32; 5];
+
+fn draw_polygon<P>(p0: Point, p1: Point, p2: Point, mut plot: P)
 where
-    P: FnMut(i32, i32),
+    P: FnMut(i32, i32, i32, i32, i32),
 {
     rasterize_triangle(
         p0,
         p1,
         p2,
         |p| (p[0], p[1]),
-        |from, to, num_steps| SlopeData::new(from[0], to[0], num_steps),
+        // slope generator
+        |from, to, num_steps| {
+            let result = [
+                SlopeData::new(from[0], to[0], num_steps),
+                SlopeData::new(from[2], to[2], num_steps),
+                SlopeData::new(from[3], to[3], num_steps),
+                SlopeData::new(from[4], to[4], num_steps),
+            ];
+            result
+        },
+        //scanline function
         |y, borders| {
-            let xstart = borders[0].get() as i32;
-            let xend = borders[1].get() as i32;
+            let xstart = borders[0][0].get() as i32;
+            let xend = borders[1][0].get() as i32;
 
+            let num_steps = xend - xstart;
+            let mut props = [
+                SlopeData::new(
+                    borders[0][1].get() as i32,
+                    borders[1][1].get() as i32,
+                    num_steps,
+                ),
+                SlopeData::new(
+                    borders[0][2].get() as i32,
+                    borders[1][2].get() as i32,
+                    num_steps,
+                ),
+                SlopeData::new(
+                    borders[0][3].get() as i32,
+                    borders[1][3].get() as i32,
+                    num_steps,
+                ),
+            ];
             for x in xstart..xend {
-                plot(x, y);
+                plot(
+                    x,
+                    y,
+                    props[0].get() as i32,
+                    props[1].get() as i32,
+                    props[2].get() as i32,
+                );
+                for prop in props.iter_mut() {
+                    prop.advance();
+                }
             }
-            borders[0].advance();
-            borders[1].advance();
+            for border in borders[0].iter_mut() {
+                border.advance();
+            }
+            for border in borders[1].iter_mut() {
+                border.advance();
+            }
         },
     )
 }
@@ -84,7 +127,7 @@ fn main() {
 
     let mut triangles = vec![
         ([10, 10], [20, 100], [90, 50]),
-        ([20, 10], [20, 100], [90, 50]),
+        // ([20, 10], [20, 100], [90, 50]),
     ];
     let mut new_triangle = VecDeque::new();
     'mainloop: loop {
@@ -100,6 +143,7 @@ fn main() {
                     if new_triangle.len() == 3 {
                         triangles.push((new_triangle[0], new_triangle[1], new_triangle[2]));
                         new_triangle.pop_front();
+                        // new_triangle.clear();
                     }
                 }
                 _ => {}
@@ -113,13 +157,19 @@ fn main() {
 
         for (p0, p1, p2) in triangles.iter().cloned() {
             color = (color << 1) | (color >> (32 - 1));
-            draw_polygon(p0, p1, p2, |x, y| {
+
+            let p0 = [p0[0], p0[1], 0xff, 0, 0];
+            let p1 = [p1[0], p1[1], 0, 0xff, 0];
+            let p2 = [p2[0], p2[1], 0, 0, 0xff];
+
+            draw_polygon(p0, p1, p2, |x, y, r, g, b| {
                 let x = x as u32;
                 let y = y as u32;
                 let pixel = &mut pixels[(y * W + x) as usize];
                 if *pixel != blank {
                     *pixel = duplicate;
                 } else {
+                    let color = (r as u32) << 16 | (g as u32) << 8 | b as u32;
                     *pixel = color & 0xffffff;
                 }
             });

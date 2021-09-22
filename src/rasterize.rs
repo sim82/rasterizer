@@ -21,7 +21,7 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
 ) where
     T: num_traits::PrimInt + Step,
     G: Fn(&P) -> (T, T),
-    S: Slope + Debug,
+    S: Debug,
     M: Fn(&P, &P, T) -> S,
     D: FnMut(T, &mut [&mut S; 2]),
 {
