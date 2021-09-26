@@ -1,5 +1,6 @@
 #![feature(step_trait)]
 
+pub mod math;
 pub mod rasterize;
 pub mod slope;
 
