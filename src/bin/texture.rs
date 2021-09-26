@@ -3,6 +3,7 @@ use std::{collections::VecDeque, fmt::Debug};
 
 use num_traits::pow;
 use rasterize::{
+    math::{self, Vec2f, Vec3f},
     rasterize::{rasterize_triangle, Slope},
     test_texture,
 };
@@ -46,13 +47,13 @@ where
         |p| (p.0, p.1),
         // slope generator
         |from, to, num_steps| {
-            // let zbegin = 1.0 / from.2;
-            // let zend = 1.0 / to.2;
-
+            let zbegin = 1.0 / from.2;
+            let zend = 1.0 / to.2;
             let result = [
                 SlopeData::new(from.0, to.0, num_steps),
-                SlopeData::new(from.3, to.3, num_steps),
-                SlopeData::new(from.4, to.4, num_steps),
+                SlopeData::new(zbegin, zend, num_steps), // inverted z coordinate
+                SlopeData::new(from.3 * zbegin, to.3 * zend, num_steps),
+                SlopeData::new(from.4 * zbegin, to.4 * zend, num_steps),
                 // SlopeData::new(from.4, to.4, num_steps),
             ];
             result
@@ -66,15 +67,17 @@ where
             let mut props = [
                 SlopeData::new(left[1].get(), right[1].get(), num_steps),
                 SlopeData::new(left[2].get(), right[2].get(), num_steps),
+                SlopeData::new(left[3].get(), right[3].get(), num_steps),
                 // SlopeData::new(left[3].get() as i32, right[3].get() as i32, num_steps),
             ];
             for x in (xstart as i32)..(xend as i32) {
+                let z = 1.0 / props[0].get();
                 fragment(
                     x as f32,
                     y,
-                    0.0,
-                    props[0].get(),
-                    props[1].get(),
+                    z,
+                    props[1].get() * z,
+                    props[2].get() * z,
                     // props[2].get() as i32,
                 );
                 for prop in props.iter_mut() {
@@ -125,18 +128,13 @@ fn main() {
     let tw = test_texture::TW as f32;
     let th = test_texture::TH as f32;
 
-    // let mut x0 = 10;
-    // let mut y0 = 10;
-    // let mut x1 = 10;
-    // let mut y1 = 100;
-    // let mut x2 = 100;
-    // let mut y2 = 100;
-    // let mut x3 = 100;
-    // let mut y3 = 10;
+    let mut xrect = [-10.0, -10.0, 10.0, 10.0];
+    let mut yrect = [-10.0, 10.0, 10.0, -10.0];
+    let mut zrect = [20.0, 20.0, 5.0, 5.0];
 
-    let mut xrect = [10.0, 10.0, 0.0, 100.0, 100.0];
-    let mut yrect = [10.0, 100.0, 100.0, 10.0];
-    let mut zrect = [0.0, 0.0, 0.0, 0.0];
+    // let mut xrect = [100.0, 100.0, 500.0, 500.0];
+    // let mut yrect = [100.0, 500.0, 500.0, 100.0];
+    // let mut zrect = [20.0, 20.0, 10.0, 10.0];
 
     let mut triangles = vec![
         (
@@ -207,6 +205,9 @@ fn main() {
         let duplicate = 0xffaa55u32;
         let mut pixels = [blank; (W * H) as usize];
 
+        let (perspective_project, perspective_unproject) =
+            math::perspective(W as f32, H as f32, 120.0);
+        let l = Vec3f(10.0, 0.0, -10.0);
         for (p0, p1, p2) in triangles.iter().cloned() {
             color = (color << 1) | (color >> (32 - 1));
 
@@ -214,18 +215,31 @@ fn main() {
             let p1 = (p1[0], p1[1], p1[2], p1[3], p1[4]);
             let p2 = (p2[0], p2[1], p2[2], p2[3], p2[4]);
 
-            draw_polygon(p0, p1, p2, |x, y, z, u, v| {
-                let x = x as u32;
-                let y = y as u32;
-                let pixel = &mut pixels[(y * W + x) as usize];
-                if *pixel != blank {
-                    *pixel = duplicate;
-                } else {
-                    let color = bitmap[(u as usize % test_texture::TH) * test_texture::TW
-                        + (v as usize % test_texture::TW)];
-                    *pixel = color & 0xffffff;
-                }
-            });
+            let transform = |(x, y, z, u, v)| {
+                let p3 = Vec3f(x, y, z) - l;
+                let Vec2f(vx, vy) = perspective_project(p3);
+                (vx, vy, z, u, v)
+            };
+
+            // let transform = |p| p;
+
+            draw_polygon(
+                transform(p0),
+                transform(p1),
+                transform(p2),
+                |x, y, z, u, v| {
+                    let x = x as u32;
+                    let y = y as u32;
+                    let pixel = &mut pixels[(y * W + x) as usize];
+                    if *pixel != blank {
+                        *pixel = duplicate;
+                    } else {
+                        let color = bitmap[(v as usize % test_texture::TH) * test_texture::TW
+                            + (u as usize % test_texture::TW)];
+                        *pixel = color & 0xffffff;
+                    }
+                },
+            );
         }
 
         texture
