@@ -1,39 +1,18 @@
 #![feature(step_trait)]
 use std::{collections::VecDeque, fmt::Debug};
 
-use rasterize::rasterize::{rasterize_triangle, Slope};
+use rasterize::{
+    rasterize::{rasterize_triangle, Slope},
+    slope::SlopeData,
+};
 use sdl2::{event::Event, keyboard::Keycode, pixels::PixelFormatEnum};
 
-#[derive(Debug)]
-pub struct SlopeData {
-    begin: f32,
-    step: f32,
-}
-impl SlopeData {
-    fn new(begin: i32, end: i32, num_steps: i32) -> SlopeData {
-        let inv_step = 1.0 / num_steps as f32;
-        SlopeData {
-            begin: begin as f32,
-            step: (end - begin) as f32 * inv_step,
-        }
-    }
-}
-impl Slope for SlopeData {
-    fn get(&self) -> f32 {
-        self.begin
-    }
-
-    fn advance(&mut self) {
-        self.begin += self.step;
-    }
-}
-
 // type Point = [i32; 5];
-type Point = (i32, i32, i32, i32, i32);
+type Point = (f32, f32, f32, f32, f32);
 
 fn draw_polygon<F>(p0: Point, p1: Point, p2: Point, mut fragment: F)
 where
-    F: FnMut(i32, i32, i32, i32, i32),
+    F: FnMut(f32, f32, f32, f32, f32),
 {
     rasterize_triangle(
         p0,
@@ -43,10 +22,10 @@ where
         // slope generator
         |from, to, num_steps| {
             let result = [
-                SlopeData::new(from.0, to.0, num_steps),
-                SlopeData::new(from.2, to.2, num_steps),
-                SlopeData::new(from.3, to.3, num_steps),
-                SlopeData::new(from.4, to.4, num_steps),
+                SlopeData::new(from.0, to.0, num_steps as i32),
+                SlopeData::new(from.2, to.2, num_steps as i32),
+                SlopeData::new(from.3, to.3, num_steps as i32),
+                SlopeData::new(from.4, to.4, num_steps as i32),
             ];
             result
         },
@@ -57,18 +36,12 @@ where
 
             let num_steps = xend - xstart;
             let mut props = [
-                SlopeData::new(left[1].get() as i32, right[1].get() as i32, num_steps),
-                SlopeData::new(left[2].get() as i32, right[2].get() as i32, num_steps),
-                SlopeData::new(left[3].get() as i32, right[3].get() as i32, num_steps),
+                SlopeData::new(left[1].get(), right[1].get(), num_steps),
+                SlopeData::new(left[2].get(), right[2].get(), num_steps),
+                SlopeData::new(left[3].get(), right[3].get(), num_steps),
             ];
             for x in xstart..xend {
-                fragment(
-                    x,
-                    y,
-                    props[0].get() as i32,
-                    props[1].get() as i32,
-                    props[2].get() as i32,
-                );
+                fragment(x as f32, y, props[0].get(), props[1].get(), props[2].get());
                 for prop in props.iter_mut() {
                     prop.advance();
                 }
@@ -115,7 +88,7 @@ fn main() {
         .unwrap();
 
     let mut triangles = vec![
-        ([10, 10], [20, 100], [90, 50]),
+        ([10.0, 10.0], [20.0, 100.0], [90.0, 50.0]),
         // ([20, 10], [20, 100], [90, 50]),
     ];
     let mut new_triangle = VecDeque::new();
@@ -128,7 +101,7 @@ fn main() {
                     ..
                 } => break 'mainloop,
                 Event::MouseButtonDown { x, y, .. } => {
-                    new_triangle.push_back([x, y]);
+                    new_triangle.push_back([x as f32, y as f32]);
                     if new_triangle.len() == 3 {
                         triangles.push((new_triangle[0], new_triangle[1], new_triangle[2]));
                         new_triangle.pop_front();
@@ -147,9 +120,9 @@ fn main() {
         for (p0, p1, p2) in triangles.iter().cloned() {
             color = (color << 1) | (color >> (32 - 1));
 
-            let p0 = (p0[0], p0[1], 0xff, 0, 0);
-            let p1 = (p1[0], p1[1], 0, 0xff, 0);
-            let p2 = (p2[0], p2[1], 0, 0, 0xff);
+            let p0 = (p0[0], p0[1], 255.0, 0.0, 0.0);
+            let p1 = (p1[0], p1[1], 0.0, 255.0, 0.0);
+            let p2 = (p2[0], p2[1], 0.0, 0.0, 255.0);
 
             draw_polygon(p0, p1, p2, |x, y, r, g, b| {
                 let x = x as u32;

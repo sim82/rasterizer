@@ -7,5 +7,5 @@ edition = "2021"
 
 [dependencies]
 num-traits = "^0.2"
-png = "^0.17"
+# png = "^0.17"
 sdl2 = "^0.34"

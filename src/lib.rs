@@ -1,6 +1,7 @@
 #![feature(step_trait)]
 
 pub mod rasterize;
+pub mod slope;
 
 pub mod test_texture {
     pub const TW: usize = 256;

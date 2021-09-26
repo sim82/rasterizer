@@ -1,4 +1,6 @@
-use std::{fmt::Debug, iter::Step};
+use std::{fmt::Debug, iter::Step, ops::AddAssign};
+
+use num_traits::One;
 
 pub trait Point2d<T> {
     fn get_xy(&self) -> (T, T);
@@ -19,7 +21,7 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
     make_slope: M,
     mut draw_scanline: D,
 ) where
-    T: num_traits::PrimInt + Step,
+    T: num_traits::Float + AddAssign + One,
     G: Fn(&P) -> (T, T),
     S: Debug,
     M: Fn(&P, &P, T) -> S,
@@ -59,8 +61,10 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
             // important: this swapps the references in left/right, *not* the actual slopes!
             std::mem::swap(&mut left, &mut right);
         }
-        for y in y0..y1 {
+        let mut y = y0;
+        while y < y1 {
             draw_scanline(y, left, right);
+            y += T::one();
         }
     }
     if y1 < y2 {
@@ -71,8 +75,10 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
             // important: this swapps the references in left/right, *not* the actual slopes!
             std::mem::swap(&mut left, &mut right);
         }
-        for y in y1..y2 {
+        let mut y = y1;
+        while y < y2 {
             draw_scanline(y, left, right);
+            y += T::one();
         }
     }
 }
