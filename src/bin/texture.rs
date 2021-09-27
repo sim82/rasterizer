@@ -7,7 +7,7 @@ use rasterize::{
     rasterize::{rasterize_triangle, Slope},
     test_texture,
 };
-use sdl2::{event::Event, keyboard::Keycode, pixels::PixelFormatEnum};
+use sdl2::{event::Event, keyboard::Keycode, mouse::MouseWheelDirection, pixels::PixelFormatEnum};
 
 #[derive(Debug)]
 pub struct SlopeData {
@@ -130,6 +130,8 @@ fn main() {
 
     let mut xrect = [-10.0, -10.0, 10.0, 10.0];
     let mut yrect = [-10.0, 10.0, 10.0, -10.0];
+    //  let mut zrect = [20.0, 20.0, 5.0, 5.0];
+
     let mut zrect = [20.0, 20.0, 5.0, 5.0];
 
     // let mut xrect = [100.0, 100.0, 500.0, 500.0];
@@ -169,6 +171,10 @@ fn main() {
         )
         .unwrap();
 
+    let l = Vec3f(0.0, 0.0, -10.0);
+
+    let (perspective_project, perspective_unproject) = math::perspective(W as f32, H as f32, 90.0);
+
     'mainloop: loop {
         for event in sdl_context.event_pump().unwrap().poll_iter() {
             match event {
@@ -177,9 +183,21 @@ fn main() {
                     keycode: Option::Some(Keycode::Escape),
                     ..
                 } => break 'mainloop,
+                Event::MouseWheel { y, .. } => {
+                    let y = y as f32;
+                    triangles[0].0[2] += y;
+                    triangles[0].1[2] += y;
+                    triangles[1].2[2] += y;
+                }
                 Event::MouseButtonDown { x, y, .. } => {
-                    xrect[click_index % 4] = x as f32;
-                    yrect[click_index % 4] = y as f32;
+                    // xrect[click_index % 4] = x as f32;
+                    // yrect[click_index % 4] = y as f32;
+
+                    let z = if (click_index % 4) < 2 { 20.0 } else { 5.0 };
+                    let z = z - l.2;
+                    let Vec3f(wx, wy, wz) = perspective_unproject(Vec2f(x as f32, y as f32), z) + l;
+                    xrect[click_index % 4] = wx;
+                    yrect[click_index % 4] = wy;
 
                     triangles = vec![
                         (
@@ -205,9 +223,6 @@ fn main() {
         let duplicate = 0xffaa55u32;
         let mut pixels = [blank; (W * H) as usize];
 
-        let (perspective_project, perspective_unproject) =
-            math::perspective(W as f32, H as f32, 120.0);
-        let l = Vec3f(10.0, 0.0, -10.0);
         for (p0, p1, p2) in triangles.iter().cloned() {
             color = (color << 1) | (color >> (32 - 1));
 
@@ -218,7 +233,7 @@ fn main() {
             let transform = |(x, y, z, u, v)| {
                 let p3 = Vec3f(x, y, z) - l;
                 let Vec2f(vx, vy) = perspective_project(p3);
-                (vx, vy, z, u, v)
+                (vx, vy, p3.2, u, v)
             };
 
             // let transform = |p| p;

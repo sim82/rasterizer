@@ -1,4 +1,4 @@
-use std::ops::Sub;
+use std::ops::{Add, Sub};
 
 // auto [PerspectiveProject, PerspectiveUnproject] = [](int W,int H, float fov)
 // {
@@ -46,6 +46,14 @@ impl Sub for Vec3f {
     }
 }
 
+impl Add for Vec3f {
+    type Output = Vec3f;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Vec3f(self.0 + rhs.0, self.1 + rhs.1, self.2 + rhs.2)
+    }
+}
+
 fn perspective_project(point: Vec3f, w: f32, h: f32, fov: f32) -> Vec2f {
     let center = (w * 0.5, h * 0.5);
     let size = center;
@@ -80,7 +88,7 @@ pub fn perspective(
     let center = (w * 0.5, h * 0.5);
     let size = center;
     let aspect = (1.0, w * 1.0 / h);
-    let scale = 1.0 / f32::tan(fov / 2.0 * (f32::atan(1.0) / 45.0));
+    let scale = 1.0 / f32::tan(fov / 2.0 * (std::f32::consts::PI / 180.0));
     let scale = (size.0 * aspect.0 * scale, size.1 * aspect.1 * scale);
 
     let (proj, unproj) = (
@@ -91,6 +99,10 @@ pub fn perspective(
             )
         },
         move |point: Vec2f, z: f32| {
+            // Doing the same in reverse, getting 3D x,y,z from 2D X & Y,
+            // can be done as follows, but requires that we already know z:
+            //    x = (X - xcenter) * z / hscale
+            //    y = (Y - ycenter) * z / vscale
             Vec3f(
                 (point.0 - center.0) * z / scale.0,
                 (point.1 - center.1) * z / scale.1,
