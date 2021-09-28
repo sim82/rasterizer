@@ -116,6 +116,14 @@ fn main() {
 
     let (perspective_project, perspective_unproject) = math::perspective(W as f32, H as f32, 90.0);
     let mut r = 0.0;
+
+    const bayer4x4_f: [[f32; 4]; 4] = [
+        // 4x4 ordered-dithering matrix
+        [0.0 / 16.0, 8.0 / 16.0, 1.0 / 16.0, 9.0 / 16.0],
+        [12.0 / 16.0, 4.0 / 16.0, 13.0 / 16.0, 5.0 / 16.0],
+        [3.0 / 16.0, 11.0 / 16.0, 2.0 / 16.0, 10.0 / 16.0],
+        [15.0 / 16.0, 7.0 / 16.0, 14.0 / 16.0, 6.0 / 16.0],
+    ];
     'mainloop: loop {
         for event in sdl_context.event_pump().unwrap().poll_iter() {
             match event {
@@ -176,9 +184,9 @@ fn main() {
                 transform(p1),
                 transform(p2),
                 |x, y, z, u, v, aux| {
-                    let x = x as u32;
-                    let y = y as u32;
-                    let pixel_index = (y * W + x) as usize;
+                    let x = x as usize;
+                    let y = y as usize;
+                    let pixel_index = y * W as usize + x;
                     let mut bad_pixel = 0;
                     let pixel = if pixel_index < pixels.len() {
                         unsafe { pixels.get_unchecked_mut(pixel_index) }
@@ -188,14 +196,16 @@ fn main() {
                     if *pixel != blank {
                         *pixel = duplicate;
                     } else {
-                        let color = bitmap[(v as usize % test_texture::TH) * test_texture::TW
-                            + (u as usize % test_texture::TW)];
+                        let ui = (u + bayer4x4_f[y % 4][x % 4]) as usize;
+                        let vi = (v + bayer4x4_f[y % 4][x % 4]) as usize;
+                        let color = bitmap
+                            [(vi % test_texture::TH) * test_texture::TW + (ui % test_texture::TW)];
                         *pixel = color & 0xffffff;
-                        if aux == 0 {
-                            *pixel = 0xff0000;
-                        } else {
-                            *pixel = 0xff00;
-                        }
+                        // if aux == 0 {
+                        //     *pixel = 0xff0000;
+                        // } else {
+                        //     *pixel = 0xff00;
+                        // }
                     }
                 },
             );
