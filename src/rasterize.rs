@@ -83,33 +83,97 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
     }
 }
 
-pub fn rasterize_polygon<T, P, G, S, M, D>(
+pub fn rasterize_polygon<P, G, S, M, D>(
     points: &[P],
     get_xy: G,
     make_slope: M,
     mut draw_scanline: D,
 ) where
-    P: Eq,
-    T: num_traits::Float + AddAssign + One + Ord,
-    G: Fn(&P) -> (T, T),
+    G: Fn(&P) -> (f32, f32),
     S: Debug + Default,
-    M: Fn(&P, &P, T) -> S,
-    D: FnMut(T, &mut S, &mut S, u32),
+    M: Fn(&P, &P, f32) -> S,
+    D: FnMut(f32, &mut S, &mut S, u32),
 {
-    let mut forward = 0;
-    let compare = |elem: &&P, prev: &&P| {
-        let (px, py) = get_xy(*prev);
-        let (cx, cy) = get_xy(*elem);
+    let compare = |elem: &P, prev: &P| {
+        let (px, py) = get_xy(prev);
+        let (cx, cy) = get_xy(elem);
 
-        (py, px).cmp(&(cy, cx))
+        (py, px).partial_cmp(&(cy, cx))
     };
-    let first = points.iter().min_by(compare).expect("min failed");
-    let last = points.iter().max_by(compare).expect("min failed");
-    let mut cur = [first, first];
-    let y = |side: usize| get_xy(cur[side]).1;
-    let mut sides = [S::default(), S::default()];
-    let mut side = 0;
-    let mut cury = y(side);
+    let mut first = 0;
+    let mut last = 0;
+    for (i, p) in points.iter().enumerate() {
+        match compare(&points[first], p) {
+            Some(std::cmp::Ordering::Less) => first = i,
+            // Some(std::cmp::Ordering::Greater) => last = i,
+            _ => (),
+        }
+        match compare(&points[last], p) {
+            // Some(std::cmp::Ordering::Less) => first = i,
+            Some(std::cmp::Ordering::Greater) => last = i,
+            _ => (),
+        }
+    }
 
-    while cur[side] != last {}
+    if first == last {
+        return;
+    }
+
+    let mut cur_left = first;
+    let mut cur_right = first;
+    let mut right_side = false;
+
+    // let yi = |side: bool| {
+    //     (if !side {
+    //         get_xy(&points[cur_left]).1
+    //     } else {
+    //         get_xy(&points[cur_right]).1
+    //     }) as usize
+    // };
+    let mut cury = get_xy(&points[first]).1;
+    let mut next_left = cury;
+    let mut next_right = cury;
+
+    let mut slope_left = S::default();
+    let mut slope_right = S::default();
+
+    let forwards = false;
+    let mut i = 0;
+    loop {
+        let (cur, next, slope) = if !right_side {
+            (&mut cur_left, &mut next_left, &mut slope_left)
+        } else {
+            (&mut cur_right, &mut next_right, &mut slope_right)
+        };
+        if *cur == last {
+            break;
+        }
+        let prev = *cur;
+
+        if right_side == forwards {
+            if prev < points.len() - 1 {
+                *cur = prev + 1;
+            } else {
+                *cur = 0;
+            }
+        } else {
+            if prev > 0 {
+                *cur = prev - 1;
+            } else {
+                *cur = points.len() - 1;
+            }
+        }
+        *next = get_xy(&points[*cur]).1;
+        *slope = make_slope(&points[prev], &points[*cur], (*next - cury) as f32);
+        right_side = next_left > next_right;
+
+        let limit = if !right_side { next_left } else { next_right };
+        while cury < limit {
+            draw_scanline(cury as f32, &mut slope_left, &mut slope_right, i);
+            cury += 1.0;
+        }
+        i += 1;
+    }
+    // let shortside_right = (y1 - y0) * (x2 - x0) < (x1 - x0) * (y2 - y0);
+    // let mut long_side = make_slope(&p0, &p2, y2 - y0);
 }

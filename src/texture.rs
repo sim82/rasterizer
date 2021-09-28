@@ -1,6 +1,6 @@
-use crate::rasterize::{rasterize_triangle, Slope};
+use crate::rasterize::{rasterize_polygon, rasterize_triangle, Slope};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SlopeData {
     begin: f32,
     step: f32,
@@ -31,10 +31,9 @@ pub fn draw_polygon<F>(p0: Point, p1: Point, p2: Point, mut fragment: F)
 where
     F: FnMut(f32, f32, f32, f32, f32, u32),
 {
-    rasterize_triangle(
-        p0,
-        p1,
-        p2,
+    let points = [p0, p1, p2];
+    rasterize_polygon(
+        &points,
         |p| (p.0, p.1),
         // slope generator
         |from, to, num_steps| {
