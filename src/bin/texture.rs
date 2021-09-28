@@ -3,7 +3,7 @@ use std::{collections::VecDeque, fmt::Debug, time::Duration};
 
 use num_traits::pow;
 use rasterize::{
-    math::{self, Vec2f, Vec3f},
+    math::{self, prelude::*},
     rasterize::{rasterize_triangle, Slope},
     test_texture,
 };
@@ -173,7 +173,7 @@ fn main() {
         )
         .unwrap();
 
-    let l = Vec3f::new(0.0, 0.0, -10.0);
+    let l = Vec3::new(0.0, 0.0, -10.0);
 
     let (perspective_project, perspective_unproject) = math::perspective(W as f32, H as f32, 90.0);
 
@@ -198,7 +198,7 @@ fn main() {
                     let z = if (click_index % 4) < 2 { 20.0 } else { 5.0 };
                     let z = z - l.z;
                     let (wx, wy, wz) =
-                        (perspective_unproject(Vec2f::new(x as f32, y as f32), z) + l).into();
+                        (perspective_unproject(Vec2::new(x as f32, y as f32), z) + l).into();
                     xrect[click_index % 4] = wx;
                     yrect[click_index % 4] = wy;
 
@@ -234,7 +234,7 @@ fn main() {
             let p2 = (p2[0], p2[1], p2[2], p2[3], p2[4]);
 
             let transform = |(x, y, z, u, v)| {
-                let p3 = Vec3f::new(x, y, z) - l;
+                let p3 = Vec3::new(x, y, z) - l;
                 let (vx, vy) = perspective_project(p3).into();
                 (vx, vy, p3.z, u, v)
             };
