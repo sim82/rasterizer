@@ -25,7 +25,7 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
     G: Fn(&P) -> (T, T),
     S: Debug,
     M: Fn(&P, &P, T) -> S,
-    D: FnMut(T, &mut S, &mut S),
+    D: FnMut(T, &mut S, &mut S, u32),
 {
     let (mut x0, mut y0) = get_xy(&p0);
     let (mut x1, mut y1) = get_xy(&p1);
@@ -63,7 +63,7 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
         }
         let mut y = y0;
         while y < y1 {
-            draw_scanline(y, left, right);
+            draw_scanline(y, left, right, 0);
             y += T::one();
         }
     }
@@ -77,8 +77,39 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
         }
         let mut y = y1;
         while y < y2 {
-            draw_scanline(y, left, right);
+            draw_scanline(y, left, right, 1);
             y += T::one();
         }
     }
+}
+
+pub fn rasterize_polygon<T, P, G, S, M, D>(
+    points: &[P],
+    get_xy: G,
+    make_slope: M,
+    mut draw_scanline: D,
+) where
+    P: Eq,
+    T: num_traits::Float + AddAssign + One + Ord,
+    G: Fn(&P) -> (T, T),
+    S: Debug + Default,
+    M: Fn(&P, &P, T) -> S,
+    D: FnMut(T, &mut S, &mut S, u32),
+{
+    let mut forward = 0;
+    let compare = |elem: &&P, prev: &&P| {
+        let (px, py) = get_xy(*prev);
+        let (cx, cy) = get_xy(*elem);
+
+        (py, px).cmp(&(cy, cx))
+    };
+    let first = points.iter().min_by(compare).expect("min failed");
+    let last = points.iter().max_by(compare).expect("min failed");
+    let mut cur = [first, first];
+    let y = |side: usize| get_xy(cur[side]).1;
+    let mut sides = [S::default(), S::default()];
+    let mut side = 0;
+    let mut cury = y(side);
+
+    while cur[side] != last {}
 }

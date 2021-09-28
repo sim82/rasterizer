@@ -30,7 +30,7 @@ where
             result
         },
         //scanline function
-        |y, left, right| {
+        |y, left, right, _| {
             let xstart = left[0].get() as i32;
             let xend = right[0].get() as i32;
 

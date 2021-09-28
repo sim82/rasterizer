@@ -9,94 +9,9 @@ use num_traits::pow;
 use rasterize::{
     math::{self, prelude::*},
     rasterize::{rasterize_triangle, Slope},
-    test_texture,
+    test_texture, texture,
 };
 use sdl2::{event::Event, keyboard::Keycode, mouse::MouseWheelDirection, pixels::PixelFormatEnum};
-
-#[derive(Debug)]
-pub struct SlopeData {
-    begin: f32,
-    step: f32,
-}
-impl SlopeData {
-    fn new(begin: f32, end: f32, num_steps: f32) -> SlopeData {
-        let inv_step = 1.0 / num_steps as f32;
-        SlopeData {
-            begin: begin as f32,
-            step: (end - begin) as f32 * inv_step,
-        }
-    }
-}
-impl Slope for SlopeData {
-    fn get(&self) -> f32 {
-        self.begin
-    }
-
-    fn advance(&mut self) {
-        self.begin += self.step;
-    }
-}
-
-// type Point = [i32; 5];
-type Point = (f32, f32, f32, f32, f32);
-
-fn draw_polygon<F>(p0: Point, p1: Point, p2: Point, mut fragment: F)
-where
-    F: FnMut(f32, f32, f32, f32, f32),
-{
-    rasterize_triangle(
-        p0,
-        p1,
-        p2,
-        |p| (p.0, p.1),
-        // slope generator
-        |from, to, num_steps| {
-            let zbegin = 1.0 / from.2;
-            let zend = 1.0 / to.2;
-            let result = [
-                SlopeData::new(from.0, to.0, num_steps),
-                SlopeData::new(zbegin, zend, num_steps), // inverted z coordinate
-                SlopeData::new(from.3 * zbegin, to.3 * zend, num_steps),
-                SlopeData::new(from.4 * zbegin, to.4 * zend, num_steps),
-                // SlopeData::new(from.4, to.4, num_steps),
-            ];
-            result
-        },
-        //scanline function
-        |y, left, right| {
-            let xstart = left[0].get();
-            let xend = right[0].get();
-
-            let num_steps = xend - xstart;
-            let mut props = [
-                SlopeData::new(left[1].get(), right[1].get(), num_steps),
-                SlopeData::new(left[2].get(), right[2].get(), num_steps),
-                SlopeData::new(left[3].get(), right[3].get(), num_steps),
-                // SlopeData::new(left[3].get() as i32, right[3].get() as i32, num_steps),
-            ];
-            for x in (xstart as i32)..(xend as i32) {
-                let z = 1.0 / props[0].get();
-                fragment(
-                    x as f32,
-                    y,
-                    z,
-                    props[1].get() * z,
-                    props[2].get() * z,
-                    // props[2].get() as i32,
-                );
-                for prop in props.iter_mut() {
-                    prop.advance();
-                }
-            }
-            for border in left.iter_mut() {
-                border.advance();
-            }
-            for border in right.iter_mut() {
-                border.advance();
-            }
-        },
-    )
-}
 
 fn main() {
     const WINDOW_SCALE: u32 = 4;
@@ -146,6 +61,8 @@ fn main() {
     // let mut xrect = [100.0, 100.0, 500.0, 500.0];
     // let mut yrect = [100.0, 500.0, 500.0, 100.0];
     // let mut zrect = [20.0, 20.0, 10.0, 10.0];
+
+    // https://excalidraw.com/#json=4721006165884928,0MUG2eCYGmj706dqxZThow
     let mut points = [
         Vec3::new(-10.0, -10.0, 20.0),
         Vec3::new(-10.0, 10.0, 20.0),
@@ -195,10 +112,10 @@ fn main() {
 
     let l = Vec3::new(0.0, 0.0, -10.0);
 
-    // let camera = glam::Mat3::from_rotation_z(1.0) * glam::Mat3::;
+    let camera_rot = glam::Mat3::from_rotation_y(1.0);
 
     let (perspective_project, perspective_unproject) = math::perspective(W as f32, H as f32, 90.0);
-
+    let mut r = 0.0;
     'mainloop: loop {
         for event in sdl_context.event_pump().unwrap().poll_iter() {
             match event {
@@ -230,6 +147,9 @@ fn main() {
             }
         }
 
+        let camera_rot = glam::Mat3::from_rotation_y(r);
+        // r += std::f32::consts::PI / 180.0;
+
         let mut color = 0x3b0103a5u32;
         let duplicate = 0xffaa55u32;
         pixels.fill(blank);
@@ -244,18 +164,18 @@ fn main() {
             color = (color << 1) | (color >> (32 - 1));
 
             let transform = |(index, u, v)| {
-                let p3 = points[index] + m - l;
+                let p3 = camera_rot * (points[index] - l);
                 let (vx, vy) = perspective_project(p3).into();
                 (vx, vy, p3.z, u, v)
             };
 
             // let transform = |p| p;
 
-            draw_polygon(
+            texture::draw_polygon(
                 transform(p0),
                 transform(p1),
                 transform(p2),
-                |x, y, z, u, v| {
+                |x, y, z, u, v, aux| {
                     let x = x as u32;
                     let y = y as u32;
                     let pixel_index = (y * W + x) as usize;
@@ -265,13 +185,18 @@ fn main() {
                     } else {
                         &mut bad_pixel
                     };
-                    // if *pixel != blank {
-                    //     *pixel = duplicate;
-                    // } else {
-                    let color = bitmap[(v as usize % test_texture::TH) * test_texture::TW
-                        + (u as usize % test_texture::TW)];
-                    *pixel = color & 0xffffff;
-                    // }
+                    if *pixel != blank {
+                        *pixel = duplicate;
+                    } else {
+                        let color = bitmap[(v as usize % test_texture::TH) * test_texture::TW
+                            + (u as usize % test_texture::TW)];
+                        *pixel = color & 0xffffff;
+                        if aux == 0 {
+                            *pixel = 0xff0000;
+                        } else {
+                            *pixel = 0xff00;
+                        }
+                    }
                 },
             );
         }
