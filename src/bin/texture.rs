@@ -1,5 +1,5 @@
 #![feature(step_trait)]
-use std::{collections::VecDeque, fmt::Debug};
+use std::{collections::VecDeque, fmt::Debug, time::Duration};
 
 use num_traits::pow;
 use rasterize::{
@@ -95,15 +95,16 @@ where
 }
 
 fn main() {
-    const W: u32 = 800;
-    const H: u32 = 600;
+    const W: u32 = 424;
+    const H: u32 = 240;
     let mut pixels = [20u8; (W * H * 4) as usize];
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
-        .window("rust-sdl2 demo: Video", W, H)
+        .window("rust-sdl2 demo: Video", W * 4, H * 4)
         .position_centered()
+        .resizable()
         .build()
         .map_err(|e| e.to_string())
         .unwrap();
@@ -111,6 +112,7 @@ fn main() {
     let mut canvas = window
         .into_canvas()
         .software()
+        // .present_vsync()
         .build()
         .map_err(|e| e.to_string())
         .unwrap();
@@ -171,7 +173,7 @@ fn main() {
         )
         .unwrap();
 
-    let l = Vec3f(0.0, 0.0, -10.0);
+    let l = Vec3f::new(0.0, 0.0, -10.0);
 
     let (perspective_project, perspective_unproject) = math::perspective(W as f32, H as f32, 90.0);
 
@@ -194,8 +196,9 @@ fn main() {
                     // yrect[click_index % 4] = y as f32;
 
                     let z = if (click_index % 4) < 2 { 20.0 } else { 5.0 };
-                    let z = z - l.2;
-                    let Vec3f(wx, wy, wz) = perspective_unproject(Vec2f(x as f32, y as f32), z) + l;
+                    let z = z - l.z;
+                    let (wx, wy, wz) =
+                        (perspective_unproject(Vec2f::new(x as f32, y as f32), z) + l).into();
                     xrect[click_index % 4] = wx;
                     yrect[click_index % 4] = wy;
 
@@ -231,9 +234,9 @@ fn main() {
             let p2 = (p2[0], p2[1], p2[2], p2[3], p2[4]);
 
             let transform = |(x, y, z, u, v)| {
-                let p3 = Vec3f(x, y, z) - l;
-                let Vec2f(vx, vy) = perspective_project(p3);
-                (vx, vy, p3.2, u, v)
+                let p3 = Vec3f::new(x, y, z) - l;
+                let (vx, vy) = perspective_project(p3).into();
+                (vx, vy, p3.z, u, v)
             };
 
             // let transform = |p| p;
@@ -245,14 +248,20 @@ fn main() {
                 |x, y, z, u, v| {
                     let x = x as u32;
                     let y = y as u32;
-                    let pixel = &mut pixels[(y * W + x) as usize];
-                    if *pixel != blank {
-                        *pixel = duplicate;
+                    let pixel_index = (y * W + x) as usize;
+                    let mut bad_pixel = 0;
+                    let pixel = if pixel_index < pixels.len() {
+                        unsafe { pixels.get_unchecked_mut(pixel_index) }
                     } else {
-                        let color = bitmap[(v as usize % test_texture::TH) * test_texture::TW
-                            + (u as usize % test_texture::TW)];
-                        *pixel = color & 0xffffff;
-                    }
+                        &mut bad_pixel
+                    };
+                    // if *pixel != blank {
+                    //     *pixel = duplicate;
+                    // } else {
+                    let color = bitmap[(v as usize % test_texture::TH) * test_texture::TW
+                        + (u as usize % test_texture::TW)];
+                    *pixel = color & 0xffffff;
+                    // }
                 },
             );
         }
@@ -273,5 +282,6 @@ fn main() {
         //     )
         //     .unwrap();
         canvas.present();
+        std::thread::sleep(Duration::from_secs_f32(1.0 / 60.0))
     }
 }

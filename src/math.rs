@@ -1,4 +1,40 @@
-use std::ops::{Add, Sub};
+pub use glam::{Vec2, Vec3};
+
+pub type Vec3f = Vec3;
+pub type Vec2f = Vec2;
+
+pub fn perspective(
+    w: f32,
+    h: f32,
+    fov: f32,
+) -> (impl Fn(Vec3f) -> Vec2f, impl Fn(Vec2f, f32) -> Vec3f) {
+    let center = Vec2::new(w * 0.5, h * 0.5);
+    let size = center;
+    let aspect = Vec2::new(1.0, w * 1.0 / h);
+    let scale = 1.0 / f32::tan(fov / 2.0 * (std::f32::consts::PI / 180.0));
+    let scale = Vec2::new(size.x * aspect.x * scale, size.y * aspect.y * scale);
+
+    let (proj, unproj) = (
+        move |point: Vec3f| {
+            Vec2f::new(
+                center.x + point.x * scale.x / point.z,
+                center.y + point.y * scale.y / point.z,
+            )
+        },
+        move |point: Vec2f, z: f32| {
+            // Doing the same in reverse, getting 3D x,y,z from 2D X & Y,
+            // can be done as follows, but requires that we already know z:
+            //    x = (X - xcenter) * z / hscale
+            //    y = (Y - ycenter) * z / vscale
+            Vec3::new(
+                (point.x - center.x) * z / scale.x,
+                (point.y - center.y) * z / scale.y,
+                z,
+            )
+        },
+    );
+    (proj, unproj)
+}
 
 // auto [PerspectiveProject, PerspectiveUnproject] = [](int W,int H, float fov)
 // {
@@ -23,106 +59,109 @@ use std::ops::{Add, Sub};
 
 // type Vec3f = (f32, f32, f32);
 // type Vec2f = (f32, f32);
+pub mod xxx {
+    use std::ops::{Add, Sub};
 
-#[derive(Debug, Clone, Copy)]
-pub struct Vec3f(pub f32, pub f32, pub f32);
+    #[derive(Debug, Clone, Copy)]
+    pub struct Vec3f(pub f32, pub f32, pub f32);
 
-#[derive(Debug, Clone, Copy)]
-pub struct Vec2f(pub f32, pub f32);
+    #[derive(Debug, Clone, Copy)]
+    pub struct Vec2f(pub f32, pub f32);
 
-impl Sub for Vec2f {
-    type Output = Vec2f;
+    impl Sub for Vec2f {
+        type Output = Vec2f;
 
-    fn sub(self, rhs: Self) -> Self::Output {
-        Vec2f(self.0 - rhs.0, self.1 - rhs.1)
+        fn sub(self, rhs: Self) -> Self::Output {
+            Vec2f(self.0 - rhs.0, self.1 - rhs.1)
+        }
     }
-}
 
-impl Sub for Vec3f {
-    type Output = Vec3f;
+    impl Sub for Vec3f {
+        type Output = Vec3f;
 
-    fn sub(self, rhs: Self) -> Self::Output {
-        Vec3f(self.0 - rhs.0, self.1 - rhs.1, self.2 - rhs.2)
+        fn sub(self, rhs: Self) -> Self::Output {
+            Vec3f(self.0 - rhs.0, self.1 - rhs.1, self.2 - rhs.2)
+        }
     }
-}
 
-impl Add for Vec3f {
-    type Output = Vec3f;
+    impl Add for Vec3f {
+        type Output = Vec3f;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        Vec3f(self.0 + rhs.0, self.1 + rhs.1, self.2 + rhs.2)
+        fn add(self, rhs: Self) -> Self::Output {
+            Vec3f(self.0 + rhs.0, self.1 + rhs.1, self.2 + rhs.2)
+        }
     }
-}
 
-fn perspective_project(point: Vec3f, w: f32, h: f32, fov: f32) -> Vec2f {
-    let center = (w * 0.5, h * 0.5);
-    let size = center;
-    let aspect = (1.0, w * 1.0 / h);
-    let scale = 1.0 / f32::tan(fov / 2.0 * (f32::atan(1.0) / 45.0));
-    let scale = (size.0 * aspect.0 * scale, size.1 * aspect.1 * scale);
-    Vec2f(
-        center.0 + point.0 * scale.0 / point.2,
-        center.1 + point.1 * scale.1 / point.2,
-    )
-}
+    fn perspective_project(point: Vec3f, w: f32, h: f32, fov: f32) -> Vec2f {
+        let center = (w * 0.5, h * 0.5);
+        let size = center;
+        let aspect = (1.0, w * 1.0 / h);
+        let scale = 1.0 / f32::tan(fov / 2.0 * (f32::atan(1.0) / 45.0));
+        let scale = (size.0 * aspect.0 * scale, size.1 * aspect.1 * scale);
+        Vec2f(
+            center.0 + point.0 * scale.0 / point.2,
+            center.1 + point.1 * scale.1 / point.2,
+        )
+    }
 
-fn perspective_unproject(point: Vec2f, z: f32, w: f32, h: f32, fov: f32) -> Vec3f {
-    let center = (w * 0.5, h * 0.5);
-    let size = center;
-    let aspect = (1.0, w * 1.0 / h);
-    let scale = 1.0 / f32::tan(fov / 2.0 * (f32::atan(1.0) / 45.0));
-    let scale = (size.0 * aspect.0 * scale, size.1 * aspect.1 * scale);
+    fn perspective_unproject(point: Vec2f, z: f32, w: f32, h: f32, fov: f32) -> Vec3f {
+        let center = (w * 0.5, h * 0.5);
+        let size = center;
+        let aspect = (1.0, w * 1.0 / h);
+        let scale = 1.0 / f32::tan(fov / 2.0 * (f32::atan(1.0) / 45.0));
+        let scale = (size.0 * aspect.0 * scale, size.1 * aspect.1 * scale);
 
-    Vec3f(
-        (point.0 - center.0) * z / scale.0,
-        (point.1 - center.1) * z / scale.1,
-        z,
-    )
-}
+        Vec3f(
+            (point.0 - center.0) * z / scale.0,
+            (point.1 - center.1) * z / scale.1,
+            z,
+        )
+    }
 
-pub fn perspective(
-    w: f32,
-    h: f32,
-    fov: f32,
-) -> (impl Fn(Vec3f) -> Vec2f, impl Fn(Vec2f, f32) -> Vec3f) {
-    let center = (w * 0.5, h * 0.5);
-    let size = center;
-    let aspect = (1.0, w * 1.0 / h);
-    let scale = 1.0 / f32::tan(fov / 2.0 * (std::f32::consts::PI / 180.0));
-    let scale = (size.0 * aspect.0 * scale, size.1 * aspect.1 * scale);
+    pub fn perspective(
+        w: f32,
+        h: f32,
+        fov: f32,
+    ) -> (impl Fn(Vec3f) -> Vec2f, impl Fn(Vec2f, f32) -> Vec3f) {
+        let center = (w * 0.5, h * 0.5);
+        let size = center;
+        let aspect = (1.0, w * 1.0 / h);
+        let scale = 1.0 / f32::tan(fov / 2.0 * (std::f32::consts::PI / 180.0));
+        let scale = (size.0 * aspect.0 * scale, size.1 * aspect.1 * scale);
 
-    let (proj, unproj) = (
-        move |point: Vec3f| {
-            Vec2f(
-                center.0 + point.0 * scale.0 / point.2,
-                center.1 + point.1 * scale.1 / point.2,
-            )
-        },
-        move |point: Vec2f, z: f32| {
-            // Doing the same in reverse, getting 3D x,y,z from 2D X & Y,
-            // can be done as follows, but requires that we already know z:
-            //    x = (X - xcenter) * z / hscale
-            //    y = (Y - ycenter) * z / vscale
-            Vec3f(
-                (point.0 - center.0) * z / scale.0,
-                (point.1 - center.1) * z / scale.1,
-                z,
-            )
-        },
-    );
-    (proj, unproj)
-}
+        let (proj, unproj) = (
+            move |point: Vec3f| {
+                Vec2f(
+                    center.0 + point.0 * scale.0 / point.2,
+                    center.1 + point.1 * scale.1 / point.2,
+                )
+            },
+            move |point: Vec2f, z: f32| {
+                // Doing the same in reverse, getting 3D x,y,z from 2D X & Y,
+                // can be done as follows, but requires that we already know z:
+                //    x = (X - xcenter) * z / hscale
+                //    y = (Y - ycenter) * z / vscale
+                Vec3f(
+                    (point.0 - center.0) * z / scale.0,
+                    (point.1 - center.1) * z / scale.1,
+                    z,
+                )
+            },
+        );
+        (proj, unproj)
+    }
 
-#[test]
-fn test_perspective() {
-    let (perspective_project, perspective_unproject) = perspective(800.0, 600.0, 120.0);
+    #[test]
+    fn test_perspective() {
+        let (perspective_project, perspective_unproject) = perspective(800.0, 600.0, 120.0);
 
-    let point3 = Vec3f(10.0, 20.0, 30.0);
-    let point2 = perspective_project(point3);
-    let point3_un = perspective_unproject(point2, 30.0);
-    println!("{:?} {:?} {:?}", point3, point2, point3_un);
+        let point3 = Vec3f(10.0, 20.0, 30.0);
+        let point2 = perspective_project(point3);
+        let point3_un = perspective_unproject(point2, 30.0);
+        println!("{:?} {:?} {:?}", point3, point2, point3_un);
 
-    // println!("{:?}", perspective_project((10.0, 10.0, 5.0)));
+        // println!("{:?}", perspective_project((10.0, 10.0, 5.0)));
+    }
 }
 
 // fn perspective<P, U>(w: f32, h: f32, fov: f32) -> (P, U)
@@ -134,4 +173,14 @@ fn test_perspective() {
 //         |point| perspective_project(point, w, h, fov),
 //         |point| perspective_unproject(w, h, fov),
 //     )
+// }
+
+// mod test {
+//     use glam::Vec3;
+//     #[test]
+//     fn test_glam() {
+//         let v = Vec3::new(1.0, 2.0, 3.0);
+//         let (x, y, z) = v.into();
+//         // let a: &[f32] = &v.into();
+//     }
 // }

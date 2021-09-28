@@ -1,3 +1,5 @@
 /target
 image.png
 Cargo.lock
+perf.data
+perf.data.*
