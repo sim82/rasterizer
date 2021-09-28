@@ -1,5 +1,5 @@
 pub mod prelude {
-    pub use glam::{Vec2, Vec3};
+    pub use glam::{IVec2, UVec2, Vec2, Vec3};
 }
 
 use prelude::*;

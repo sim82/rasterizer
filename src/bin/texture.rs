@@ -95,14 +95,17 @@ where
 }
 
 fn main() {
+    const WINDOW_SCALE: u32 = 4;
     const W: u32 = 424;
     const H: u32 = 240;
-    let mut pixels = [20u8; (W * H * 4) as usize];
+
+    let blank = 0x0u32;
+    let mut pixels = [blank; (W * H) as usize];
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
-        .window("rust-sdl2 demo: Video", W * 4, H * 4)
+        .window("rust-sdl2 demo: Video", W * WINDOW_SCALE, H * WINDOW_SCALE)
         .position_centered()
         .resizable()
         .build()
@@ -194,11 +197,11 @@ fn main() {
                 Event::MouseButtonDown { x, y, .. } => {
                     // xrect[click_index % 4] = x as f32;
                     // yrect[click_index % 4] = y as f32;
+                    let point = (IVec2::new(x, y) / WINDOW_SCALE as i32).as_vec2();
 
                     let z = if (click_index % 4) < 2 { 20.0 } else { 5.0 };
                     let z = z - l.z;
-                    let (wx, wy, wz) =
-                        (perspective_unproject(Vec2::new(x as f32, y as f32), z) + l).into();
+                    let (wx, wy, wz) = (perspective_unproject(point, z) + l).into();
                     xrect[click_index % 4] = wx;
                     yrect[click_index % 4] = wy;
 
@@ -222,10 +225,8 @@ fn main() {
         }
 
         let mut color = 0x3b0103a5u32;
-        let blank = 0x0u32;
         let duplicate = 0xffaa55u32;
-        let mut pixels = [blank; (W * H) as usize];
-
+        pixels.fill(blank);
         for (p0, p1, p2) in triangles.iter().cloned() {
             color = (color << 1) | (color >> (32 - 1));
 
