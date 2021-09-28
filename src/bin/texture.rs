@@ -1,5 +1,9 @@
 #![feature(step_trait)]
-use std::{collections::VecDeque, fmt::Debug, time::Duration};
+use std::{
+    collections::VecDeque,
+    fmt::Debug,
+    time::{Duration, Instant},
+};
 
 use num_traits::pow;
 use rasterize::{
@@ -142,19 +146,32 @@ fn main() {
     // let mut xrect = [100.0, 100.0, 500.0, 500.0];
     // let mut yrect = [100.0, 500.0, 500.0, 100.0];
     // let mut zrect = [20.0, 20.0, 10.0, 10.0];
-
+    let mut points = [
+        Vec3::new(-10.0, -10.0, 20.0),
+        Vec3::new(-10.0, 10.0, 20.0),
+        Vec3::new(10.0, 10.0, 20.0),
+        Vec3::new(10.0, -10.0, 20.0),
+        Vec3::new(-10.0, -10.0, 5.0),
+        Vec3::new(-10.0, 10.0, 5.0),
+        Vec3::new(10.0, 10.0, 5.0),
+        Vec3::new(10.0, -10.0, 5.0),
+    ];
     let mut triangles = vec![
-        (
-            [xrect[0], yrect[0], zrect[0], 0.0, 0.0],
-            [xrect[1], yrect[1], zrect[1], 0.0, th],
-            [xrect[2], yrect[2], zrect[2], tw, th],
-        ),
-        (
-            [xrect[2], yrect[2], zrect[2], tw, th],
-            [xrect[3], yrect[3], zrect[3], tw, 0.0],
-            [xrect[0], yrect[0], zrect[0], 0.0, 0.0],
-        ),
-        // ([20, 10], [20, 100], [90, 50]),
+        // back
+        ((0, 0.0, 0.0), (1, 0.0, th), (2, tw, th)),
+        ((2, tw, th), (3, tw, 0.0), (0, 0.0, 0.0)),
+        // left
+        ((0, 0.0, 0.0), (1, 0.0, th), (5, tw, th)),
+        ((5, tw, th), (4, tw, 0.0), (0, 0.0, 0.0)),
+        // right
+        ((3, 0.0, 0.0), (2, 0.0, th), (6, tw, th)),
+        ((6, tw, th), (7, tw, 0.0), (3, 0.0, 0.0)),
+        // top
+        ((0, 0.0, 0.0), (3, 0.0, th), (7, tw, th)),
+        ((7, tw, th), (4, tw, 0.0), (0, 0.0, 0.0)),
+        // bottom
+        ((1, 0.0, 0.0), (2, 0.0, th), (6, tw, th)),
+        ((6, tw, th), (5, tw, 0.0), (1, 0.0, 0.0)),
     ];
     // let mut new_triangle = VecDeque::new();
     let mut click_index = 0;
@@ -178,6 +195,8 @@ fn main() {
 
     let l = Vec3::new(0.0, 0.0, -10.0);
 
+    // let camera = glam::Mat3::from_rotation_z(1.0) * glam::Mat3::;
+
     let (perspective_project, perspective_unproject) = math::perspective(W as f32, H as f32, 90.0);
 
     'mainloop: loop {
@@ -190,9 +209,9 @@ fn main() {
                 } => break 'mainloop,
                 Event::MouseWheel { y, .. } => {
                     let y = y as f32;
-                    triangles[0].0[2] += y;
-                    triangles[0].1[2] += y;
-                    triangles[1].2[2] += y;
+                    for p in points[0..4].iter_mut() {
+                        p.z += y;
+                    }
                 }
                 Event::MouseButtonDown { x, y, .. } => {
                     // xrect[click_index % 4] = x as f32;
@@ -205,19 +224,6 @@ fn main() {
                     xrect[click_index % 4] = wx;
                     yrect[click_index % 4] = wy;
 
-                    triangles = vec![
-                        (
-                            [xrect[0], yrect[0], zrect[0], 0.0, 0.0],
-                            [xrect[1], yrect[1], zrect[1], 0.0, th],
-                            [xrect[2], yrect[2], zrect[2], tw, th],
-                        ),
-                        (
-                            [xrect[2], yrect[2], zrect[2], tw, th],
-                            [xrect[3], yrect[3], zrect[3], tw, 0.0],
-                            [xrect[0], yrect[0], zrect[0], 0.0, 0.0],
-                        ),
-                        // ([20, 10], [20, 100], [90, 50]),
-                    ];
                     click_index += 1;
                 }
                 _ => {}
@@ -227,15 +233,18 @@ fn main() {
         let mut color = 0x3b0103a5u32;
         let duplicate = 0xffaa55u32;
         pixels.fill(blank);
+
+        let start = Instant::now();
+        let m = Vec3::ZERO;
+        // for yt in -5..5 {
+        //     for xt in -5..5 {
+        //         let m = Vec3::new(xt as f32 * 5.0, yt as f32 * 5.0, 0.0);
+
         for (p0, p1, p2) in triangles.iter().cloned() {
             color = (color << 1) | (color >> (32 - 1));
 
-            let p0 = (p0[0], p0[1], p0[2], p0[3], p0[4]);
-            let p1 = (p1[0], p1[1], p1[2], p1[3], p1[4]);
-            let p2 = (p2[0], p2[1], p2[2], p2[3], p2[4]);
-
-            let transform = |(x, y, z, u, v)| {
-                let p3 = Vec3::new(x, y, z) - l;
+            let transform = |(index, u, v)| {
+                let p3 = points[index] + m - l;
                 let (vx, vy) = perspective_project(p3).into();
                 (vx, vy, p3.z, u, v)
             };
@@ -266,7 +275,10 @@ fn main() {
                 },
             );
         }
+        //     }
+        // }
 
+        println!("time: {:?}", start.elapsed());
         texture
             .update(
                 None,
