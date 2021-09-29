@@ -94,7 +94,7 @@ pub fn rasterize_polygon<P, G, S, M, D>(
     G: Fn(&P) -> (f32, f32),
     S: Debug + Default,
     M: Fn(&P, &P, f32) -> S,
-    D: FnMut(f32, &mut S, &mut S, u32),
+    D: FnMut(i32, &mut S, &mut S, u32),
 {
     let compare = |elem: &P, prev: &P| {
         let (px, py) = get_xy(prev);
@@ -102,79 +102,76 @@ pub fn rasterize_polygon<P, G, S, M, D>(
 
         (py, px).partial_cmp(&(cy, cx))
     };
-    let mut first = 0;
-    let mut last = 0;
+    let mut first_point = 0;
+    let mut last_point = 0;
     for (i, p) in points.iter().enumerate() {
-        match compare(&points[first], p) {
-            Some(std::cmp::Ordering::Less) => first = i,
-            // Some(std::cmp::Ordering::Greater) => last = i,
+        match compare(&points[first_point], p) {
+            Some(std::cmp::Ordering::Less) => first_point = i,
             _ => (),
         }
-        match compare(&points[last], p) {
-            // Some(std::cmp::Ordering::Less) => first = i,
-            Some(std::cmp::Ordering::Greater) => last = i,
+        match compare(&points[last_point], p) {
+            Some(std::cmp::Ordering::Greater) => last_point = i,
             _ => (),
         }
     }
 
-    if first == last {
+    if first_point == last_point {
         return;
     }
 
-    let mut cur_left = first;
-    let mut cur_right = first;
+    let mut cur_point_left = first_point;
+    let mut cur_point_right = first_point;
     let mut right_side = false;
 
-    // let yi = |side: bool| {
-    //     (if !side {
-    //         get_xy(&points[cur_left]).1
-    //     } else {
-    //         get_xy(&points[cur_right]).1
-    //     }) as usize
-    // };
-    let mut cury = get_xy(&points[first]).1;
-    let mut next_left = cury;
-    let mut next_right = cury;
+    let mut cur_y = get_xy(&points[first_point]).1 as i32;
+    let mut next_y_left = cur_y;
+    let mut next_y_right = cur_y;
 
     let mut slope_left = S::default();
     let mut slope_right = S::default();
 
     let forwards = false;
     loop {
-        let (cur, next, slope) = if !right_side {
-            (&mut cur_left, &mut next_left, &mut slope_left)
+        let (cur_point, next_y, slope) = if !right_side {
+            (&mut cur_point_left, &mut next_y_left, &mut slope_left)
         } else {
-            (&mut cur_right, &mut next_right, &mut slope_right)
+            (&mut cur_point_right, &mut next_y_right, &mut slope_right)
         };
-        if *cur == last {
+        if *cur_point == last_point {
             break;
         }
-        let prev = *cur;
+        let prev_point = *cur_point;
 
         if right_side == forwards {
-            if prev < points.len() - 1 {
-                *cur = prev + 1;
+            if prev_point < points.len() - 1 {
+                *cur_point = prev_point + 1;
             } else {
-                *cur = 0;
+                *cur_point = 0;
             }
         } else {
-            if prev > 0 {
-                *cur = prev - 1;
+            if prev_point > 0 {
+                *cur_point = prev_point - 1;
             } else {
-                *cur = points.len() - 1;
+                *cur_point = points.len() - 1;
             }
         }
-        *next = get_xy(&points[*cur]).1;
-        *slope = make_slope(&points[prev], &points[*cur], (*next - cury) as f32);
-        right_side = next_left > next_right;
+        *next_y = get_xy(&points[*cur_point]).1 as i32;
+        *slope = make_slope(
+            &points[prev_point],
+            &points[*cur_point],
+            (*next_y - cur_y) as f32,
+        );
+        right_side = next_y_left > next_y_right;
 
-        let limit = if !right_side { next_left } else { next_right };
+        let limit = if !right_side {
+            next_y_left
+        } else {
+            next_y_right
+        };
         let aux = G_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        while cury < limit {
-            draw_scanline(cury as f32, &mut slope_left, &mut slope_right, aux);
-            cury += 1.0;
+        while cur_y < limit {
+            draw_scanline(cur_y, &mut slope_left, &mut slope_right, aux);
+            cur_y += 1;
         }
     }
-    // let shortside_right = (y1 - y0) * (x2 - x0) < (x1 - x0) * (y2 - y0);
-    // let mut long_side = make_slope(&p0, &p2, y2 - y0);
 }

@@ -29,7 +29,7 @@ type Point = (f32, f32, f32, f32, f32);
 
 pub fn draw_polygon<F>(points: &[Point], mut fragment: F)
 where
-    F: FnMut(f32, f32, f32, f32, f32, u32),
+    F: FnMut(i32, i32, f32, f32, f32, u32),
 {
     // let points = [p0, p1, p2];
     rasterize_polygon(
@@ -58,19 +58,10 @@ where
                 SlopeData::new(left[1].get(), right[1].get(), num_steps),
                 SlopeData::new(left[2].get(), right[2].get(), num_steps),
                 SlopeData::new(left[3].get(), right[3].get(), num_steps),
-                // SlopeData::new(left[3].get() as i32, right[3].get() as i32, num_steps),
             ];
             for x in (xstart as i32)..(xend as i32) {
                 let z = 1.0 / props[0].get();
-                fragment(
-                    x as f32,
-                    y,
-                    z,
-                    props[1].get() * z,
-                    props[2].get() * z,
-                    // props[2].get() as i32,
-                    aux,
-                );
+                fragment(x, y, z, props[1].get() * z, props[2].get() * z, aux);
                 for prop in props.iter_mut() {
                     prop.advance();
                 }

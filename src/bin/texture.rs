@@ -173,7 +173,7 @@ fn main() {
             texpoly::draw_polygon(
                 &[transform(p0), transform(p1), transform(p2), transform(p3)],
                 |x, y, _z, u, v, aux| {
-                    if x < 0.0 || x >= W as f32 || y < 0.0 || y >= H as f32 {
+                    if x < 0 || x >= W as i32 || y < 0 || y >= H as i32 {
                         return;
                     }
                     let x = x as usize;
