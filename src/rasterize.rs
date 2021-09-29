@@ -1,4 +1,4 @@
-use std::{fmt::Debug, iter::Step, ops::AddAssign};
+use std::{fmt::Debug, ops::AddAssign};
 
 use num_traits::One;
 
@@ -83,6 +83,8 @@ pub fn rasterize_triangle<T, P, G, S, M, D>(
     }
 }
 
+pub static G_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
 pub fn rasterize_polygon<P, G, S, M, D>(
     points: &[P],
     get_xy: G,
@@ -138,7 +140,6 @@ pub fn rasterize_polygon<P, G, S, M, D>(
     let mut slope_right = S::default();
 
     let forwards = false;
-    let mut i = 0;
     loop {
         let (cur, next, slope) = if !right_side {
             (&mut cur_left, &mut next_left, &mut slope_left)
@@ -168,11 +169,11 @@ pub fn rasterize_polygon<P, G, S, M, D>(
         right_side = next_left > next_right;
 
         let limit = if !right_side { next_left } else { next_right };
+        let aux = G_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         while cury < limit {
-            draw_scanline(cury as f32, &mut slope_left, &mut slope_right, i);
+            draw_scanline(cury as f32, &mut slope_left, &mut slope_right, aux);
             cury += 1.0;
         }
-        i += 1;
     }
     // let shortside_right = (y1 - y0) * (x2 - x0) < (x1 - x0) * (y2 - y0);
     // let mut long_side = make_slope(&p0, &p2, y2 - y0);

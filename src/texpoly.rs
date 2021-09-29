@@ -1,4 +1,4 @@
-use crate::rasterize::{rasterize_polygon, rasterize_triangle, Slope};
+use crate::rasterize::{rasterize_polygon, Slope};
 
 #[derive(Debug, Default)]
 pub struct SlopeData {
@@ -27,11 +27,11 @@ impl Slope for SlopeData {
 // type Point = [i32; 5];
 type Point = (f32, f32, f32, f32, f32);
 
-pub fn draw_polygon<F>(p0: Point, p1: Point, p2: Point, mut fragment: F)
+pub fn draw_polygon<F>(points: &[Point], mut fragment: F)
 where
     F: FnMut(f32, f32, f32, f32, f32, u32),
 {
-    let points = [p0, p1, p2];
+    // let points = [p0, p1, p2];
     rasterize_polygon(
         &points,
         |p| (p.0, p.1),

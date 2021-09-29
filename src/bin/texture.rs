@@ -1,22 +1,16 @@
 #![feature(step_trait)]
-use std::{
-    collections::VecDeque,
-    fmt::Debug,
-    time::{Duration, Instant},
-};
+use std::time::Instant;
 
-use num_traits::pow;
 use rasterize::{
     math::{self, prelude::*},
-    rasterize::{rasterize_triangle, Slope},
-    test_texture, texture,
+    test_texture, texpoly,
 };
-use sdl2::{event::Event, keyboard::Keycode, mouse::MouseWheelDirection, pixels::PixelFormatEnum};
+use sdl2::{event::Event, keyboard::Keycode, pixels::PixelFormatEnum};
 
 fn main() {
-    const WINDOW_SCALE: u32 = 4;
-    const W: u32 = 424;
-    const H: u32 = 240;
+    const WINDOW_SCALE: u32 = 2;
+    const W: u32 = 424 * 1;
+    const H: u32 = 240 * 1;
 
     let blank = 0x0u32;
     let mut pixels = [blank; (W * H) as usize];
@@ -33,8 +27,8 @@ fn main() {
 
     let mut canvas = window
         .into_canvas()
-        .software()
-        // .present_vsync()
+        // .software()
+        .present_vsync()
         .build()
         .map_err(|e| e.to_string())
         .unwrap();
@@ -56,12 +50,6 @@ fn main() {
     let mut yrect = [-10.0, 10.0, 10.0, -10.0];
     //  let mut zrect = [20.0, 20.0, 5.0, 5.0];
 
-    let mut zrect = [20.0, 20.0, 5.0, 5.0];
-
-    // let mut xrect = [100.0, 100.0, 500.0, 500.0];
-    // let mut yrect = [100.0, 500.0, 500.0, 100.0];
-    // let mut zrect = [20.0, 20.0, 10.0, 10.0];
-
     // https://excalidraw.com/#json=4721006165884928,0MUG2eCYGmj706dqxZThow
     let mut points = [
         Vec3::new(-10.0, -10.0, 20.0),
@@ -73,23 +61,19 @@ fn main() {
         Vec3::new(10.0, 10.0, 5.0),
         Vec3::new(10.0, -10.0, 5.0),
     ];
-    let mut triangles = vec![
+    let quads = vec![
         // back
-        ((0, 0.0, 0.0), (1, 0.0, th), (2, tw, th)),
-        ((2, tw, th), (3, tw, 0.0), (0, 0.0, 0.0)),
+        ((0, 0.0, 0.0), (1, 0.0, th), (2, tw, th), (3, tw, 0.0)),
         // left
-        ((0, 0.0, 0.0), (5, tw, th), (1, 0.0, th)),
-        ((5, tw, th), (0, 0.0, 0.0), (4, tw, 0.0)),
+        ((0, 0.0, 0.0), (4, tw, 0.0), (5, tw, th), (1, 0.0, th)),
         // right
-        ((3, 0.0, 0.0), (2, 0.0, th), (6, tw, th)),
-        ((6, tw, th), (7, tw, 0.0), (3, 0.0, 0.0)),
+        ((3, 0.0, 0.0), (2, 0.0, th), (6, tw, th), (7, tw, 0.0)),
         // top
-        ((0, 0.0, 0.0), (3, 0.0, th), (7, tw, th)),
-        ((7, tw, th), (4, tw, 0.0), (0, 0.0, 0.0)),
+        ((0, 0.0, 0.0), (3, 0.0, th), (7, tw, th), (4, tw, 0.0)),
         // bottom
-        ((1, 0.0, 0.0), (6, tw, th), (2, 0.0, th)),
-        ((6, tw, th), (1, 0.0, 0.0), (5, tw, 0.0)),
+        ((1, 0.0, 0.0), (5, tw, 0.0), (6, tw, th), (2, 0.0, th)),
     ];
+
     // let mut new_triangle = VecDeque::new();
     let mut click_index = 0;
     let bitmap = test_texture::create();
@@ -112,12 +96,12 @@ fn main() {
 
     let l = Vec3::new(0.0, 0.0, -10.0);
 
-    let camera_rot = glam::Mat3::from_rotation_y(1.0);
-
     let (perspective_project, perspective_unproject) = math::perspective(W as f32, H as f32, 90.0);
     let mut r = 0.0;
-
-    const bayer4x4_f: [[f32; 4]; 4] = [
+    let mut debug_overdraw = false;
+    let mut draw_texels = true;
+    let mut bayer_dither = false;
+    const BAYER4X4_F: [[f32; 4]; 4] = [
         // 4x4 ordered-dithering matrix
         [0.0 / 16.0, 8.0 / 16.0, 1.0 / 16.0, 9.0 / 16.0],
         [12.0 / 16.0, 4.0 / 16.0, 13.0 / 16.0, 5.0 / 16.0],
@@ -138,6 +122,17 @@ fn main() {
                         p.z += y;
                     }
                 }
+                Event::KeyDown {
+                    keycode: Some(keycode),
+                    ..
+                } => match keycode {
+                    Keycode::A => r += std::f32::consts::PI / 180.0,
+                    Keycode::Z => r -= std::f32::consts::PI / 180.0,
+                    Keycode::D => debug_overdraw = !debug_overdraw,
+                    Keycode::T => draw_texels = !draw_texels,
+                    Keycode::B => bayer_dither = !bayer_dither,
+                    _ => (),
+                },
                 Event::MouseButtonDown { x, y, .. } => {
                     // xrect[click_index % 4] = x as f32;
                     // yrect[click_index % 4] = y as f32;
@@ -145,7 +140,7 @@ fn main() {
 
                     let z = if (click_index % 4) < 2 { 20.0 } else { 5.0 };
                     let z = z - l.z;
-                    let (wx, wy, wz) = (perspective_unproject(point, z) + l).into();
+                    let (wx, wy, _wz) = (perspective_unproject(point, z) + l).into();
                     xrect[click_index % 4] = wx;
                     yrect[click_index % 4] = wy;
 
@@ -155,7 +150,7 @@ fn main() {
             }
         }
 
-        let camera_rot = glam::Mat3::from_rotation_y(r);
+        let camera_rot = glam::Mat3::from_rotation_z(r);
         // r += std::f32::consts::PI / 180.0;
 
         let mut color = 0x3b0103a5u32;
@@ -163,12 +158,8 @@ fn main() {
         pixels.fill(blank);
 
         let start = Instant::now();
-        let m = Vec3::ZERO;
-        // for yt in -5..5 {
-        //     for xt in -5..5 {
-        //         let m = Vec3::new(xt as f32 * 5.0, yt as f32 * 5.0, 0.0);
-
-        for (p0, p1, p2) in triangles.iter().cloned() {
+        rasterize::rasterize::G_COUNT.store(0, std::sync::atomic::Ordering::SeqCst);
+        for (p0, p1, p2, p3) in quads.iter().cloned() {
             color = (color << 1) | (color >> (32 - 1));
 
             let transform = |(index, u, v)| {
@@ -178,12 +169,13 @@ fn main() {
             };
 
             // let transform = |p| p;
-
-            texture::draw_polygon(
-                transform(p0),
-                transform(p1),
-                transform(p2),
-                |x, y, z, u, v, aux| {
+            let colors = [0xff, 0xff00, 0xff0000, 0xffff, 0xff00ff, 0xffff00];
+            texpoly::draw_polygon(
+                &[transform(p0), transform(p1), transform(p2), transform(p3)],
+                |x, y, _z, u, v, aux| {
+                    if x < 0.0 || x >= W as f32 || y < 0.0 || y >= H as f32 {
+                        return;
+                    }
                     let x = x as usize;
                     let y = y as usize;
                     let pixel_index = y * W as usize + x;
@@ -193,25 +185,30 @@ fn main() {
                     } else {
                         &mut bad_pixel
                     };
-                    if *pixel != blank {
+                    if *pixel != blank && debug_overdraw {
                         *pixel = duplicate;
                     } else {
-                        let ui = (u + bayer4x4_f[y % 4][x % 4]) as usize;
-                        let vi = (v + bayer4x4_f[y % 4][x % 4]) as usize;
-                        let color = bitmap
-                            [(vi % test_texture::TH) * test_texture::TW + (ui % test_texture::TW)];
-                        *pixel = color & 0xffffff;
-                        // if aux == 0 {
-                        //     *pixel = 0xff0000;
-                        // } else {
-                        //     *pixel = 0xff00;
-                        // }
+                        // let ui = (u + bayer4x4_f[y % 4][x % 4]) as usize;
+                        // let vi = (v + bayer4x4_f[y % 4][x % 4]) as usize;
+                        if draw_texels {
+                            let (ui, vi) = if bayer_dither {
+                                (
+                                    (u + BAYER4X4_F[y % 4][x % 4]) as usize,
+                                    (v + BAYER4X4_F[y % 4][x % 4]) as usize,
+                                )
+                            } else {
+                                (u as usize, v as usize)
+                            };
+                            let color = bitmap[(vi % test_texture::TH) * test_texture::TW
+                                + (ui % test_texture::TW)];
+                            *pixel = color & 0xffffff;
+                        } else {
+                            *pixel = colors[aux as usize % colors.len()];
+                        }
                     }
                 },
             );
         }
-        //     }
-        // }
 
         println!("time: {:?}", start.elapsed());
         texture
@@ -230,6 +227,6 @@ fn main() {
         //     )
         //     .unwrap();
         canvas.present();
-        std::thread::sleep(Duration::from_secs_f32(1.0 / 60.0))
+        // std::thread::sleep(Duration::from_secs_f32(1.0 / 60.0))
     }
 }
