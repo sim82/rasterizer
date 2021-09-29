@@ -8,9 +8,11 @@ use rasterize::{
 use sdl2::{event::Event, keyboard::Keycode, pixels::PixelFormatEnum};
 
 fn main() {
-    const WINDOW_SCALE: u32 = 2;
-    const W: u32 = 424 * 1;
-    const H: u32 = 240 * 1;
+    const ZOOM: u32 = 4;
+
+    const WINDOW_SCALE: u32 = ZOOM;
+    const W: u32 = 424 * 4 / ZOOM;
+    const H: u32 = 240 * 4 / ZOOM;
 
     let blank = 0x0u32;
     let mut pixels = [blank; (W * H) as usize];
@@ -159,6 +161,7 @@ fn main() {
 
         let start = Instant::now();
         rasterize::rasterize::G_COUNT.store(0, std::sync::atomic::Ordering::SeqCst);
+        let mut num_texel = 0;
         for (p0, p1, p2, p3) in quads.iter().cloned() {
             color = (color << 1) | (color >> (32 - 1));
 
@@ -169,7 +172,10 @@ fn main() {
             };
 
             // let transform = |p| p;
-            let colors = [0xff, 0xff00, 0xff0000, 0xffff, 0xff00ff, 0xffff00];
+            let colors = [
+                0xff, 0xff00, 0xff0000, 0xffff, 0xff00ff, 0xffff00, 0xff8080, 0x80ff80, 0x8080ff,
+                0x808080, 0x80, 0x8000, 0x800000,
+            ];
             texpoly::draw_polygon(
                 &[transform(p0), transform(p1), transform(p2), transform(p3)],
                 |x, y, _z, u, v, aux| {
@@ -179,12 +185,7 @@ fn main() {
                     let x = x as usize;
                     let y = y as usize;
                     let pixel_index = y * W as usize + x;
-                    let mut bad_pixel = 0;
-                    let pixel = if pixel_index < pixels.len() {
-                        unsafe { pixels.get_unchecked_mut(pixel_index) }
-                    } else {
-                        &mut bad_pixel
-                    };
+                    let pixel = unsafe { pixels.get_unchecked_mut(pixel_index) };
                     if *pixel != blank && debug_overdraw {
                         *pixel = duplicate;
                     } else {
@@ -206,11 +207,18 @@ fn main() {
                             *pixel = colors[aux as usize % colors.len()];
                         }
                     }
+                    num_texel += 1;
                 },
             );
         }
 
-        println!("time: {:?}", start.elapsed());
+        let dt = start.elapsed();
+        println!(
+            "time: {:?} {} {}",
+            dt,
+            num_texel,
+            num_texel as f32 * 1e-6 / dt.as_secs_f32()
+        );
         texture
             .update(
                 None,
