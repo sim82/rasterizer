@@ -1,5 +1,7 @@
 #![feature(step_trait)]
 
+use glam::Vec3;
+
 pub mod math;
 pub mod rasterize;
 pub mod slope;
@@ -47,4 +49,112 @@ pub mod test_texture {
         }
         bitmap
     }
+}
+#[derive(Debug, Clone)]
+pub struct Plane {
+    pub normal: Vec3,
+    pub distance: f32,
+}
+
+impl Plane {
+    pub fn new(a: Vec3, b: Vec3, c: Vec3) -> Self {
+        let normal = (b - a).cross(c - a).normalize();
+        let distance = normal.dot(a);
+        Plane { normal, distance }
+    }
+
+    pub fn distance_to(&self, p: Vec3) -> f32 {
+        self.normal.dot(p) - self.distance
+    }
+}
+
+#[test]
+fn test_plane() {
+    let p = Plane::new(
+        Vec3::new(1.0, 1.0, 1.0),
+        Vec3::new(2.0, 1.0, 1.0),
+        Vec3::new(1.0, 2.0, 1.0),
+    );
+    println!("{:?}", p);
+
+    let p = Plane::new(
+        Vec3::new(1.0, 0.0, 0.0),
+        Vec3::new(0.0, 1.0, 0.0),
+        Vec3::new(0.0, 0.0, 1.0),
+    );
+    println!("{:?}", p);
+
+    let p = Plane::new(
+        Vec3::new(1.0, 0.0, 0.0),
+        Vec3::new(0.0, 1.0, 0.0),
+        Vec3::new(0.0, 1.0, 1.0),
+    );
+    println!("{:?}", p);
+}
+
+pub fn clip_polygon(plane: Plane, points: &[Vec3]) -> Vec<Vec3> {
+    let mut out = Vec::new();
+    let mut keepfirst = true;
+
+    for i in 0..points.len() {
+        let current = points[i];
+        let next = if i < points.len() - 1 {
+            points[i + 1]
+        } else {
+            points[0]
+        };
+
+        let outside = plane.distance_to(current);
+        let outside_next = plane.distance_to(next);
+        let mut keep = outside >= 0.0;
+        if i == 0 {
+            keepfirst = keep;
+            keep = true;
+        }
+        if (outside < 0.0 && outside_next > 0.0) || (outside > 0.0 && outside_next < 0.0) {
+            let factor = outside / (outside - outside_next);
+            let b = current + (next - current) * factor;
+
+            if keep {
+                out.push(current);
+            }
+            out.push(b);
+        } else {
+            if keep {
+                out.push(current);
+            }
+        }
+    }
+    if !keepfirst {
+        out.remove(0);
+    }
+    out
+}
+
+#[test]
+pub fn test_clip() {
+    let points = [
+        Vec3::new(0.0, 0.0, 0.0),
+        Vec3::new(2.0, 0.0, 0.0),
+        Vec3::new(2.0, 2.0, 0.0),
+        Vec3::new(0.0, 2.0, 0.0),
+    ];
+
+    let plane = Plane::new(
+        Vec3::new(1.0, 0.0, 0.0),
+        Vec3::new(0.0, 1.0, 0.0),
+        Vec3::new(0.0, 1.0, 1.0),
+    );
+
+    let clipped = clip_polygon(plane, &points);
+    println!("{:?}", clipped);
+
+    let plane = Plane::new(
+        Vec3::new(0.0, 1.0, 1.0),
+        Vec3::new(0.0, 1.0, 0.0),
+        Vec3::new(1.0, 0.0, 0.0),
+    );
+
+    let clipped = clip_polygon(plane, &points);
+    println!("{:?}", clipped);
 }
