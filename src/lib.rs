@@ -4,6 +4,7 @@ pub mod math;
 pub mod rasterize;
 pub mod slope;
 pub mod texpoly;
+pub mod texpoly_vec;
 
 pub mod test_texture {
     pub const TW: usize = 256;

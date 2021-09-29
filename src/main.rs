@@ -22,10 +22,10 @@ where
         // slope generator
         |from, to, num_steps| {
             let result = [
-                SlopeData::new(from.0, to.0, num_steps as i32),
-                SlopeData::new(from.2, to.2, num_steps as i32),
-                SlopeData::new(from.3, to.3, num_steps as i32),
-                SlopeData::new(from.4, to.4, num_steps as i32),
+                SlopeData::new(from.0, to.0, num_steps),
+                SlopeData::new(from.2, to.2, num_steps),
+                SlopeData::new(from.3, to.3, num_steps),
+                SlopeData::new(from.4, to.4, num_steps),
             ];
             result
         },
@@ -36,9 +36,9 @@ where
 
             let num_steps = xend - xstart;
             let mut props = [
-                SlopeData::new(left[1].get(), right[1].get(), num_steps),
-                SlopeData::new(left[2].get(), right[2].get(), num_steps),
-                SlopeData::new(left[3].get(), right[3].get(), num_steps),
+                SlopeData::new(left[1].get(), right[1].get(), num_steps as f32),
+                SlopeData::new(left[2].get(), right[2].get(), num_steps as f32),
+                SlopeData::new(left[3].get(), right[3].get(), num_steps as f32),
             ];
             for x in xstart..xend {
                 fragment(x as f32, y, props[0].get(), props[1].get(), props[2].get());

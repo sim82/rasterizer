@@ -3,12 +3,12 @@ use std::time::Instant;
 
 use rasterize::{
     math::{self, prelude::*},
-    test_texture, texpoly,
+    test_texture, texpoly, texpoly_vec,
 };
 use sdl2::{event::Event, keyboard::Keycode, pixels::PixelFormatEnum};
 
 fn main() {
-    const ZOOM: u32 = 4;
+    const ZOOM: u32 = 1;
 
     const WINDOW_SCALE: u32 = ZOOM;
     const W: u32 = 424 * 4 / ZOOM;
@@ -29,8 +29,8 @@ fn main() {
 
     let mut canvas = window
         .into_canvas()
-        // .software()
-        .present_vsync()
+        .software()
+        // .present_vsync()
         .build()
         .map_err(|e| e.to_string())
         .unwrap();
@@ -96,7 +96,7 @@ fn main() {
         )
         .unwrap();
 
-    let l = Vec3::new(0.0, 0.0, -10.0);
+    let l = Vec3::new(0.0, 0.0, -13.0);
 
     let (perspective_project, perspective_unproject) = math::perspective(W as f32, H as f32, 90.0);
     let mut r = 0.0;
@@ -176,8 +176,43 @@ fn main() {
                 0xff, 0xff00, 0xff0000, 0xffff, 0xff00ff, 0xffff00, 0xff8080, 0x80ff80, 0x8080ff,
                 0x808080, 0x80, 0x8000, 0x800000,
             ];
-            texpoly::draw_polygon(
+            texpoly_vec::draw_polygon(
                 &[transform(p0), transform(p1), transform(p2), transform(p3)],
+                // |x, y, _z, u, v, aux| {
+                //     if x < 0 || x >= W as i32 || y < 0 || y >= H as i32 {
+                //         return;
+                //     }
+                //     let x = x as usize;
+                //     let y = y as usize;
+                //     let pixel_index = y * W as usize + x;
+                //     let pixel = unsafe { pixels.get_unchecked_mut(pixel_index) };
+                //     if *pixel != blank && debug_overdraw {
+                //         *pixel = duplicate;
+                //     } else {
+                //         // let ui = (u + bayer4x4_f[y % 4][x % 4]) as usize;
+                //         // let vi = (v + bayer4x4_f[y % 4][x % 4]) as usize;
+                //         if draw_texels {
+                //             let (ui, vi) = if bayer_dither {
+                //                 (
+                //                     (u + BAYER4X4_F[y % 4][x % 4]) as usize,
+                //                     (v + BAYER4X4_F[y % 4][x % 4]) as usize,
+                //                 )
+                //             } else {
+                //                 (u as usize, v as usize)
+                //             };
+                //             let color = unsafe {
+                //                 bitmap.get_unchecked(
+                //                     (vi % test_texture::TH) * test_texture::TW
+                //                         + (ui % test_texture::TW),
+                //                 )
+                //             };
+                //             *pixel = color & 0xffffff;
+                //         } else {
+                //             *pixel = colors[aux as usize % colors.len()];
+                //         }
+                //     }
+                //     num_texel += 1;
+                // },
                 |x, y, _z, u, v, aux| {
                     if x < 0 || x >= W as i32 || y < 0 || y >= H as i32 {
                         return;
@@ -185,28 +220,16 @@ fn main() {
                     let x = x as usize;
                     let y = y as usize;
                     let pixel_index = y * W as usize + x;
-                    let pixel = unsafe { pixels.get_unchecked_mut(pixel_index) };
-                    if *pixel != blank && debug_overdraw {
-                        *pixel = duplicate;
-                    } else {
-                        // let ui = (u + bayer4x4_f[y % 4][x % 4]) as usize;
-                        // let vi = (v + bayer4x4_f[y % 4][x % 4]) as usize;
-                        if draw_texels {
-                            let (ui, vi) = if bayer_dither {
-                                (
-                                    (u + BAYER4X4_F[y % 4][x % 4]) as usize,
-                                    (v + BAYER4X4_F[y % 4][x % 4]) as usize,
-                                )
-                            } else {
-                                (u as usize, v as usize)
-                            };
-                            let color = bitmap[(vi % test_texture::TH) * test_texture::TW
-                                + (ui % test_texture::TW)];
-                            *pixel = color & 0xffffff;
-                        } else {
-                            *pixel = colors[aux as usize % colors.len()];
-                        }
-                    }
+
+                    let u = u as usize % test_texture::TW;
+                    let v = v as usize % test_texture::TH;
+                    let texel_index = u + v * test_texture::TW;
+
+                    // let pixel = unsafe { pixels.get_unchecked_mut(pixel_index) };
+                    unsafe {
+                        *pixels.get_unchecked_mut(pixel_index) = *bitmap.get_unchecked(texel_index)
+                    };
+
                     num_texel += 1;
                 },
             );
@@ -214,10 +237,11 @@ fn main() {
 
         let dt = start.elapsed();
         println!(
-            "time: {:?} {} {}",
+            "time: {:?} {} {} MTx/s {}",
             dt,
             num_texel,
-            num_texel as f32 * 1e-6 / dt.as_secs_f32()
+            num_texel as f32 * 1e-6 / dt.as_secs_f32(),
+            (dt.as_secs_f32() / num_texel as f32) * 2e9
         );
         texture
             .update(

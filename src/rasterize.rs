@@ -8,8 +8,8 @@ pub trait Point2d<T> {
     fn get_y(&self) -> T;
 }
 
-pub trait Slope {
-    fn get(&self) -> f32;
+pub trait Slope<T> {
+    fn get(&self) -> T;
     fn advance(&mut self);
 }
 
