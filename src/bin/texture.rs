@@ -2,7 +2,7 @@
 use std::time::Instant;
 
 use rasterize::{
-    clip_polygon,
+    clip_polygon, clip_polygon_inplace,
     math::{self, prelude::*},
     test_texture, texpoly, texpoly_vec,
 };
@@ -183,7 +183,8 @@ fn main() {
                 .collect::<Vec<_>>();
 
             for p in frustum.iter() {
-                poly = clip_polygon(p.clone(), &poly[..]);
+                // poly = clip_polygon(p.clone(), &poly[..]);
+                clip_polygon_inplace(*p, &mut poly);
             }
 
             let poly = poly

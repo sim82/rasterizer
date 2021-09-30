@@ -50,7 +50,7 @@ pub mod test_texture {
         bitmap
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Plane {
     pub normal: Vec3,
     pub distance: f32,
@@ -127,6 +127,46 @@ pub fn clip_polygon(plane: Plane, points: &[(Vec3, Vec2)]) -> Vec<(Vec3, Vec2)> 
     out
 }
 
+pub fn clip_polygon_inplace(plane: Plane, points: &mut Vec<(Vec3, Vec2)>) {
+    // explicitly store copy of the first point so we can close the loop on the
+    // last segment even if the point is removed.
+    let first = points[0];
+
+    let mut i = 0;
+    while i < points.len() {
+        let current = &points[i];
+        let next = if i < points.len() - 1 {
+            &points[i + 1] // fearlessly borrowing into the modified container... take that c++
+        } else {
+            &first
+        };
+        let outside = plane.distance_to(current.0);
+        let outside_next = plane.distance_to(next.0);
+        let keep = outside >= 0.0;
+        // println!("{} {:?} {}", i, keep, outside);
+        if (outside < 0.0 && outside_next > 0.0) || (outside > 0.0 && outside_next < 0.0) {
+            let factor = outside / (outside - outside_next);
+            let b = (
+                current.0 + (next.0 - current.0) * factor,
+                current.1 + (next.1 - current.1) * factor,
+            );
+            if !keep {
+                points.remove(i);
+            } else {
+                i += 1;
+            }
+            points.insert(i, b);
+            i += 1;
+        } else {
+            if !keep {
+                points.remove(i);
+            } else {
+                i += 1;
+            }
+        }
+    }
+}
+
 #[test]
 pub fn test_clip() {
     let points = [
@@ -145,6 +185,10 @@ pub fn test_clip() {
     let clipped = clip_polygon(plane, &points);
     println!("{:?}", clipped);
 
+    let mut clipped_inplace = points.iter().cloned().collect();
+    clip_polygon_inplace(plane, &mut clipped_inplace);
+    println!("{:?}", clipped_inplace);
+
     let plane = Plane::new(
         Vec3::new(0.0, 1.0, 1.0),
         Vec3::new(0.0, 1.0, 0.0),
@@ -153,6 +197,9 @@ pub fn test_clip() {
 
     let clipped = clip_polygon(plane, &points);
     println!("{:?}", clipped);
+    let mut clipped_inplace = points.iter().cloned().collect();
+    clip_polygon_inplace(plane, &mut clipped_inplace);
+    println!("{:?}", clipped_inplace);
 }
 
 pub fn make_frustum<U>(corners: &[Vec2; 4], perspective_unproject: U) -> Vec<Plane>
