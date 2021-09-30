@@ -130,6 +130,9 @@ pub fn clip_polygon(plane: Plane, points: &[(Vec3, Vec2)]) -> Vec<(Vec3, Vec2)> 
 pub fn clip_polygon_inplace(plane: Plane, points: &mut Vec<(Vec3, Vec2)>) {
     // explicitly store copy of the first point so we can close the loop on the
     // last segment even if the point is removed.
+    if points.len() < 3 {
+        return;
+    }
     let first = points[0];
 
     let mut i = 0;

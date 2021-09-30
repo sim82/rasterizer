@@ -187,6 +187,9 @@ fn main() {
                 clip_polygon_inplace(*p, &mut poly);
             }
 
+            if poly.len() < 3 {
+                continue;
+            }
             let poly = poly
                 .iter()
                 .map(|(p, t)| {
