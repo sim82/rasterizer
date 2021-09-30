@@ -2,6 +2,7 @@
 use std::time::Instant;
 
 use rasterize::{
+    clip_polygon,
     math::{self, prelude::*},
     test_texture, texpoly, texpoly_vec,
 };
@@ -110,6 +111,17 @@ fn main() {
         [3.0 / 16.0, 11.0 / 16.0, 2.0 / 16.0, 10.0 / 16.0],
         [15.0 / 16.0, 7.0 / 16.0, 14.0 / 16.0, 6.0 / 16.0],
     ];
+
+    let frustum = rasterize::make_frustum(
+        &[
+            Vec2::ZERO,
+            Vec2::new(W as f32 - 1.0, 0.0),
+            Vec2::new(W as f32 - 1.0, H as f32 - 1.0),
+            Vec2::new(0.0, H as f32 - 1.0),
+        ],
+        &perspective_unproject,
+    );
+    println!("frustum: {:?}", frustum);
     'mainloop: loop {
         for event in sdl_context.event_pump().unwrap().poll_iter() {
             match event {
@@ -164,65 +176,73 @@ fn main() {
         let mut num_texel = 0;
         for (p0, p1, p2, p3) in quads.iter().cloned() {
             color = (color << 1) | (color >> (32 - 1));
+            let poly_indexed = [p0, p1, p2, p3];
+            let mut poly = poly_indexed
+                .iter()
+                .map(|(i, u, v)| (camera_rot * (points[*i as usize] - l), Vec2::new(*u, *v)))
+                .collect::<Vec<_>>();
 
-            let transform = |(index, u, v)| {
-                let p3 = camera_rot * (points[index] - l);
-                let (vx, vy) = perspective_project(p3).into();
-                (vx, vy, p3.z, u, v)
-            };
+            for p in frustum.iter() {
+                poly = clip_polygon(p.clone(), &poly[..]);
+            }
+
+            let poly = poly
+                .iter()
+                .map(|(p, t)| {
+                    let v = perspective_project(*p);
+                    (v.x, v.y, p.z, t.x, t.y)
+                })
+                .collect::<Vec<_>>();
 
             // let transform = |p| p;
             let colors = [
                 0xff, 0xff00, 0xff0000, 0xffff, 0xff00ff, 0xffff00, 0xff8080, 0x80ff80, 0x8080ff,
                 0x808080, 0x80, 0x8000, 0x800000,
             ];
-            texpoly::draw_polygon(
-                &[transform(p0), transform(p1), transform(p2), transform(p3)],
-                |x, y, _z, u, v, aux| {
-                    if x < 0 || x >= W as i32 || y < 0 || y >= H as i32 {
-                        return;
-                    }
-                    let x = x as usize;
-                    let y = y as usize;
-                    let pixel_index = y * W as usize + x;
+            // let clipped_polygon = vec![transform(p0), transform(p1), transform(p2), transform(p3)]
+            texpoly::draw_polygon(&poly[..], |x, y, _z, u, v, aux| {
+                if x < 0 || x >= W as i32 || y < 0 || y >= H as i32 {
+                    panic!("out of bounds");
+                }
+                let x = x as usize;
+                let y = y as usize;
+                let pixel_index = y * W as usize + x;
 
-                    if true {
-                        let pixel = unsafe { pixels.get_unchecked_mut(pixel_index) };
-                        if *pixel != blank && debug_overdraw {
-                            *pixel = duplicate;
-                        } else {
-                            if draw_texels {
-                                let (ui, vi) = if bayer_dither {
-                                    (
-                                        (u + BAYER4X4_F[y % 4][x % 4]) as usize,
-                                        (v + BAYER4X4_F[y % 4][x % 4]) as usize,
-                                    )
-                                } else {
-                                    (u as usize, v as usize)
-                                };
-                                let color = unsafe {
-                                    bitmap.get_unchecked(
-                                        (vi % test_texture::TH) * test_texture::TW
-                                            + (ui % test_texture::TW),
-                                    )
-                                };
-                                *pixel = color & 0xffffff;
-                            } else {
-                                *pixel = colors[aux as usize % colors.len()];
-                            }
-                        }
+                if true {
+                    let pixel = unsafe { pixels.get_unchecked_mut(pixel_index) };
+                    if *pixel != blank && debug_overdraw {
+                        *pixel = duplicate;
                     } else {
-                        let u = u as usize % test_texture::TW;
-                        let v = v as usize % test_texture::TH;
-                        let texel_index = u + v * test_texture::TW;
-                        unsafe {
-                            *pixels.get_unchecked_mut(pixel_index) =
-                                *bitmap.get_unchecked(texel_index)
-                        };
+                        if draw_texels {
+                            let (ui, vi) = if bayer_dither {
+                                (
+                                    (u + BAYER4X4_F[y % 4][x % 4]) as usize,
+                                    (v + BAYER4X4_F[y % 4][x % 4]) as usize,
+                                )
+                            } else {
+                                (u as usize, v as usize)
+                            };
+                            let color = unsafe {
+                                bitmap.get_unchecked(
+                                    (vi % test_texture::TH) * test_texture::TW
+                                        + (ui % test_texture::TW),
+                                )
+                            };
+                            *pixel = color & 0xffffff;
+                        } else {
+                            *pixel = colors[aux as usize % colors.len()];
+                        }
                     }
-                    num_texel += 1;
-                },
-            );
+                } else {
+                    let u = u as usize % test_texture::TW;
+                    let v = v as usize % test_texture::TH;
+                    let texel_index = u + v * test_texture::TW;
+                    unsafe {
+                        *pixels.get_unchecked_mut(pixel_index) = *bitmap.get_unchecked(texel_index)
+                    };
+                }
+                num_texel += 1;
+            });
         }
 
         let dt = start.elapsed();

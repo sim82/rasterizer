@@ -1,6 +1,6 @@
 #![feature(step_trait)]
 
-use glam::Vec3;
+use glam::{Vec2, Vec3};
 
 pub mod math;
 pub mod rasterize;
@@ -92,9 +92,8 @@ fn test_plane() {
     println!("{:?}", p);
 }
 
-pub fn clip_polygon(plane: Plane, points: &[Vec3]) -> Vec<Vec3> {
+pub fn clip_polygon(plane: Plane, points: &[(Vec3, Vec2)]) -> Vec<(Vec3, Vec2)> {
     let mut out = Vec::new();
-    let mut keepfirst = true;
 
     for i in 0..points.len() {
         let current = points[i];
@@ -104,16 +103,16 @@ pub fn clip_polygon(plane: Plane, points: &[Vec3]) -> Vec<Vec3> {
             points[0]
         };
 
-        let outside = plane.distance_to(current);
-        let outside_next = plane.distance_to(next);
-        let mut keep = outside >= 0.0;
-        if i == 0 {
-            keepfirst = keep;
-            keep = true;
-        }
+        let outside = plane.distance_to(current.0);
+        let outside_next = plane.distance_to(next.0);
+        let keep = outside >= 0.0;
+        // println!("{} {:?} {}", i, keep, outside);
         if (outside < 0.0 && outside_next > 0.0) || (outside > 0.0 && outside_next < 0.0) {
             let factor = outside / (outside - outside_next);
-            let b = current + (next - current) * factor;
+            let b = (
+                current.0 + (next.0 - current.0) * factor,
+                current.1 + (next.1 - current.1) * factor,
+            );
 
             if keep {
                 out.push(current);
@@ -125,19 +124,16 @@ pub fn clip_polygon(plane: Plane, points: &[Vec3]) -> Vec<Vec3> {
             }
         }
     }
-    if !keepfirst {
-        out.remove(0);
-    }
     out
 }
 
 #[test]
 pub fn test_clip() {
     let points = [
-        Vec3::new(0.0, 0.0, 0.0),
-        Vec3::new(2.0, 0.0, 0.0),
-        Vec3::new(2.0, 2.0, 0.0),
-        Vec3::new(0.0, 2.0, 0.0),
+        (Vec3::new(0.0, 0.0, 0.0), Vec2::new(0.0, 0.0)),
+        (Vec3::new(2.0, 0.0, 0.0), Vec2::new(1.0, 0.0)),
+        (Vec3::new(2.0, 2.0, 0.0), Vec2::new(1.0, 1.0)),
+        (Vec3::new(0.0, 2.0, 0.0), Vec2::new(0.0, 1.0)),
     ];
 
     let plane = Plane::new(
@@ -157,4 +153,27 @@ pub fn test_clip() {
 
     let clipped = clip_polygon(plane, &points);
     println!("{:?}", clipped);
+}
+
+pub fn make_frustum<U>(corners: &[Vec2; 4], perspective_unproject: U) -> Vec<Plane>
+where
+    U: Fn(Vec2, f32) -> Vec3,
+{
+    let znear = 0.1;
+    let zany = 1.0;
+    let mut res = vec![Plane::new(
+        Vec3::new(0.0, 0.0, znear),
+        Vec3::new(1.0, 0.0, znear),
+        Vec3::new(0.0, 0.1, znear),
+    )];
+    for i in 0..4 {
+        let current = corners[i];
+        let next = if i == 3 { corners[0] } else { corners[i + 1] };
+        res.push(Plane::new(
+            perspective_unproject(current, zany),
+            perspective_unproject(next, zany),
+            Vec3::ZERO,
+        ));
+    }
+    res
 }
