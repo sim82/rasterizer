@@ -4,6 +4,7 @@ use std::time::Instant;
 use rasterize::{
     clip_polygon, clip_polygon_inplace,
     math::{self, prelude::*},
+    palette::{self, Framebuffer},
     test_texture, texpoly, texpoly_vec,
 };
 use sdl2::{event::Event, keyboard::Keycode, pixels::PixelFormatEnum};
@@ -12,11 +13,15 @@ fn main() {
     const ZOOM: u32 = 4;
 
     const WINDOW_SCALE: u32 = ZOOM;
-    const W: u32 = 424 * 4 / ZOOM;
+    const W: u32 = 320 * 4 / ZOOM;
     const H: u32 = 240 * 4 / ZOOM;
 
-    let blank = 0x0u32;
-    let mut pixels = [blank; (W * H) as usize];
+    // let blank = 0x10u8;
+    // let mut pixels = [blank; (W * H) as usize];
+
+    let (palette, mapping_table) = palette::read_colormap();
+
+    let mut fb = Framebuffer::new(W, H, &palette);
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -75,27 +80,13 @@ fn main() {
 
     // let mut new_triangle = VecDeque::new();
     let mut click_index = 0;
-    let bitmap = test_texture::create();
-    let mut test_texture = texture_creator
-        .create_texture(
-            PixelFormatEnum::ABGR8888,
-            sdl2::render::TextureAccess::Streaming,
-            test_texture::TW as u32,
-            test_texture::TH as u32,
-        )
-        .unwrap();
+    let bitmap = palette::quantize(&palette, &test_texture::create());
 
-    test_texture
-        .update(
-            None,
-            unsafe { std::mem::transmute::<&[u32], &[u8]>(&bitmap) },
-            4 * test_texture::TW,
-        )
-        .unwrap();
+    let bitmap = palette::read_pcx("assets/wall01.pcx");
 
-    let l = Vec3::new(0.0, 0.0, -13.0);
+    let mut l = Vec3::new(0.0, 0.0, -13.0);
 
-    let (perspective_project, perspective_unproject) = math::perspective(W as f32, H as f32, 90.0);
+    let (perspective_project, perspective_unproject) = math::perspective(W as f32, H as f32, 100.0);
     let mut r = 0.0;
     let mut debug_overdraw = false;
     let mut draw_texels = true;
@@ -119,7 +110,8 @@ fn main() {
     );
     println!("frustum: {:?}", frustum);
     'mainloop: loop {
-        for event in sdl_context.event_pump().unwrap().poll_iter() {
+        let mut event_pump = sdl_context.event_pump().unwrap();
+        for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
                 | Event::KeyDown {
@@ -136,9 +128,13 @@ fn main() {
                     keycode: Some(keycode),
                     ..
                 } => match keycode {
-                    Keycode::A => r += std::f32::consts::PI / 180.0,
-                    Keycode::Z => r -= std::f32::consts::PI / 180.0,
-                    Keycode::D => debug_overdraw = !debug_overdraw,
+                    // Keycode::Z => r += std::f32::consts::PI / 180.0,
+                    // Keycode::X => r -= std::f32::consts::PI / 180.0,
+                    // Keycode::A => l.x -= 1.0,
+                    // Keycode::D => l.x += 1.0,
+                    // Keycode::W => l.z += 1.0,
+                    // Keycode::S => l.z -= 1.0,
+                    // Keycode::D => debug_overdraw = !debug_overdraw,
                     Keycode::T => draw_texels = !draw_texels,
                     Keycode::B => bayer_dither = !bayer_dither,
                     _ => (),
@@ -147,12 +143,36 @@ fn main() {
             }
         }
 
-        let camera_rot = glam::Mat3::from_rotation_z(r);
+        let keyboard_state = event_pump.keyboard_state();
+
+        let rot = glam::Mat3::from_rotation_y(-r);
+        let forward = rot * Vec3::new(0.0, 0.0, 0.5);
+        let right = rot * Vec3::new(0.5, 0.0, 0.0);
+        if keyboard_state.is_scancode_pressed(sdl2::keyboard::Scancode::A) {
+            l -= right;
+        }
+        if keyboard_state.is_scancode_pressed(sdl2::keyboard::Scancode::D) {
+            l += right;
+        }
+        if keyboard_state.is_scancode_pressed(sdl2::keyboard::Scancode::W) {
+            l += forward;
+        }
+        if keyboard_state.is_scancode_pressed(sdl2::keyboard::Scancode::S) {
+            l -= forward;
+        }
+        if keyboard_state.is_scancode_pressed(sdl2::keyboard::Scancode::Z) {
+            r += std::f32::consts::PI / 180.0 / 2.0;
+        }
+        if keyboard_state.is_scancode_pressed(sdl2::keyboard::Scancode::X) {
+            r -= std::f32::consts::PI / 180.0 / 2.0;
+        }
+
+        let camera_rot = glam::Mat3::from_rotation_y(r);
         // r += std::f32::consts::PI / 180.0;
 
         let mut color = 0x3b0103a5u32;
         let duplicate = 0xffaa55u32;
-        pixels.fill(blank);
+        fb.framebuffer.fill(0x0u8);
 
         let start = Instant::now();
         rasterize::rasterize::G_COUNT.store(0, std::sync::atomic::Ordering::SeqCst);
@@ -187,7 +207,7 @@ fn main() {
                 0x808080, 0x80, 0x8000, 0x800000,
             ];
             // let clipped_polygon = vec![transform(p0), transform(p1), transform(p2), transform(p3)]
-            texpoly::draw_polygon(&poly[..], |x, y, _z, u, v, aux| {
+            texpoly::draw_polygon(&poly[..], |x, y, z, u, v, aux| {
                 if x < 0 || x >= W as i32 || y < 0 || y >= H as i32 {
                     panic!("out of bounds");
                 }
@@ -195,37 +215,46 @@ fn main() {
                 let y = y as usize;
                 let pixel_index = y * W as usize + x;
 
-                if true {
-                    let pixel = unsafe { pixels.get_unchecked_mut(pixel_index) };
-                    if *pixel != blank && debug_overdraw {
-                        *pixel = duplicate;
-                    } else {
-                        if draw_texels {
-                            let (ui, vi) = if bayer_dither {
-                                (
-                                    (u + BAYER4X4_F[y % 4][x % 4]) as usize,
-                                    (v + BAYER4X4_F[y % 4][x % 4]) as usize,
-                                )
-                            } else {
-                                (u as usize, v as usize)
-                            };
-                            let color = unsafe {
-                                bitmap.get_unchecked(
-                                    (vi % test_texture::TH) * test_texture::TW
-                                        + (ui % test_texture::TW),
-                                )
-                            };
-                            *pixel = color & 0xffffff;
-                        } else {
-                            *pixel = colors[aux as usize % colors.len()];
-                        }
-                    }
+                if !true {
+                    // let pixel = unsafe { pixels.get_unchecked_mut(pixel_index) };
+                    // if *pixel != blank && debug_overdraw {
+                    //     *pixel = duplicate;
+                    // } else {
+                    //     if draw_texels {
+                    //         let (ui, vi) = if bayer_dither {
+                    //             (
+                    //                 (u + BAYER4X4_F[y % 4][x % 4]) as usize,
+                    //                 (v + BAYER4X4_F[y % 4][x % 4]) as usize,
+                    //             )
+                    //         } else {
+                    //             (u as usize, v as usize)
+                    //         };
+                    //         let color = unsafe {
+                    //             bitmap.get_unchecked(
+                    //                 (vi % test_texture::TH) * test_texture::TW
+                    //                     + (ui % test_texture::TW),
+                    //             )
+                    //         };
+                    //         *pixel = color & 0xffffff;
+                    //     } else {
+                    //         *pixel = colors[aux as usize % colors.len()];
+                    //     }
+                    // }
                 } else {
+                    // let zmin = 10.0;
+                    // let zmax = 50.0;
+                    // let clamp_z = z.clamp(zmin, zmax);
+                    // let zfrac = (clamp_z - zmin) / (zmax - zmin);
+                    // let zi = 30 + (zfrac * 32.0) as usize;
+
+                    let zi = (z as usize).clamp(8, 72);
+                    let mi = 24 + (zi - 8) * 32 / 64;
                     let u = u as usize % test_texture::TW;
                     let v = v as usize % test_texture::TH;
                     let texel_index = u + v * test_texture::TW;
                     unsafe {
-                        *pixels.get_unchecked_mut(pixel_index) = *bitmap.get_unchecked(texel_index)
+                        *fb.framebuffer.get_unchecked_mut(pixel_index) =
+                            mapping_table[mi][*bitmap.get_unchecked(texel_index) as usize];
                     };
                 }
                 num_texel += 1;
@@ -240,13 +269,14 @@ fn main() {
             num_texel as f32 * 1e-6 / dt.as_secs_f32(),
             (dt.as_secs_f32() / num_texel as f32) * 2e9
         );
-        texture
-            .update(
-                None,
-                unsafe { std::mem::transmute::<&[u32], &[u8]>(&pixels) },
-                4 * W as usize,
-            )
-            .unwrap();
+        // texture
+        //     .update(
+        //         None,
+        //         unsafe { std::mem::transmute::<&[u32], &[u8]>(&pixels) },
+        //         4 * W as usize,
+        //     )
+        //     .unwrap();
+        fb.upload(&mut texture);
         canvas.copy(&texture, None, None).unwrap();
         canvas.present();
     }

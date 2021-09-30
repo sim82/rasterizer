@@ -3,6 +3,7 @@
 use glam::{Vec2, Vec3};
 
 pub mod math;
+pub mod palette;
 pub mod rasterize;
 pub mod slope;
 pub mod texpoly;

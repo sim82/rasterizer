@@ -10,7 +10,7 @@ num-traits = "^0.2"
 # png = "^0.17"
 sdl2 = "^0.34"
 glam = "^0.18"
-
+pcx = "0.2"
 
 [profile.release]
 debug = true

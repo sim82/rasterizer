@@ -1,0 +1,14 @@
+Copyright 2020 Simon Berger
+
+Licensed under the Apache License, Version 2.0, <docs/LICENSE-APACHE or
+http://apache.org/licenses/LICENSE-2.0> or the MIT license <docs/LICENSE-MIT or
+http://opensource.org/licenses/MIT>, at your option. This file may not be
+copied, modified, or distributed except according to those terms.
+
+
+textures floor01.pcx and wall01.pcx derived from
+ * https://www.wildtextures.com/free-textures/grungy-yet-elegant-elevation-stone-ii/
+ * https://www.wildtextures.com/free-textures/granite-flooring-tiles-texture/
+ * textures are completely free for both, personal and commercial use
+     
+COLORMAP.PCX is the quake2 palette which seems to be widely available online (e.g. http://www.quake2.com/qworkshop/features/files.htm)
