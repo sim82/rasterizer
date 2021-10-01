@@ -11,7 +11,7 @@ use rasterize::{
 use sdl2::{event::Event, keyboard::Keycode, pixels::PixelFormatEnum};
 
 fn main() {
-    const ZOOM: u32 = 2;
+    const ZOOM: u32 = 4;
 
     const WINDOW_SCALE: u32 = ZOOM;
     const W: u32 = 320 * 4 / ZOOM;
@@ -36,8 +36,8 @@ fn main() {
 
     let mut canvas = window
         .into_canvas()
-        .software()
-        // .present_vsync()
+        // .software()
+        .present_vsync()
         .build()
         .map_err(|e| e.to_string())
         .unwrap();
@@ -186,10 +186,10 @@ fn main() {
             l -= forward;
         }
         if keyboard_state.is_scancode_pressed(sdl2::keyboard::Scancode::Z) {
-            r += std::f32::consts::PI / 180.0 / 2.0;
+            r += std::f32::consts::PI / 180.0 / 1.0;
         }
         if keyboard_state.is_scancode_pressed(sdl2::keyboard::Scancode::X) {
-            r -= std::f32::consts::PI / 180.0 / 2.0;
+            r -= std::f32::consts::PI / 180.0 / 1.0;
         }
 
         let camera_rot = glam::Mat3::from_rotation_y(r);
@@ -199,6 +199,10 @@ fn main() {
         let duplicate = 0xffaa55u32;
         // fb.framebuffer.fill(0x0u8);
         fb.clear();
+
+        for y in 0..240 {
+            fb.framebuffer[(16 + y * W) as usize] = y as u8;
+        }
 
         let start = Instant::now();
         rasterize::rasterize::G_COUNT.store(0, std::sync::atomic::Ordering::SeqCst);
