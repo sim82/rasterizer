@@ -2,6 +2,7 @@
 
 use glam::{Vec2, Vec3};
 
+pub mod level;
 pub mod math;
 pub mod palette;
 pub mod rasterize;

@@ -2,8 +2,9 @@ use std::{fs, path::Path};
 
 use sdl2::{rect::Rect, render::Texture};
 
-const NUM_COLORS: usize = 256;
-const NUM_ROWS: usize = 320;
+pub const NUM_COLORS: usize = 256;
+pub const NUM_GAMMA_RAMP: usize = 64;
+pub const NUM_ROWS: usize = 320;
 
 pub fn read_pcx<P>(path: P) -> Vec<u8>
 where
@@ -49,6 +50,7 @@ pub struct Framebuffer {
     palette: [u32; NUM_COLORS],
     pub framebuffer: Vec<u8>,
     framebuffer_rgb: Vec<u32>,
+    pub zbuffer: Vec<f32>,
 }
 
 impl Framebuffer {
@@ -59,6 +61,7 @@ impl Framebuffer {
             palette: *palette,
             framebuffer: vec![0u8; (width * height) as usize],
             framebuffer_rgb: vec![0u32; (width * height) as usize],
+            zbuffer: vec![f32::MAX; (width * height) as usize],
         }
     }
     pub fn upload(&mut self, texture: &mut Texture) {
@@ -72,6 +75,10 @@ impl Framebuffer {
                 self.width as usize * 4,
             )
             .unwrap();
+    }
+    pub fn clear(&mut self) {
+        self.framebuffer.fill(0);
+        self.zbuffer.fill(f32::MAX);
     }
 }
 

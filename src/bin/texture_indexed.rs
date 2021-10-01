@@ -1,8 +1,9 @@
 #![feature(step_trait)]
 use std::time::Instant;
 
+use glam::IVec3;
 use rasterize::{
-    clip_polygon, clip_polygon_inplace,
+    clip_polygon, clip_polygon_inplace, level,
     math::{self, prelude::*},
     palette::{self, Framebuffer},
     test_texture, texpoly, texpoly_vec,
@@ -10,7 +11,7 @@ use rasterize::{
 use sdl2::{event::Event, keyboard::Keycode, pixels::PixelFormatEnum};
 
 fn main() {
-    const ZOOM: u32 = 4;
+    const ZOOM: u32 = 2;
 
     const WINDOW_SCALE: u32 = ZOOM;
     const W: u32 = 320 * 4 / ZOOM;
@@ -55,34 +56,58 @@ fn main() {
     let th = test_texture::TH as f32;
 
     // https://excalidraw.com/#json=4721006165884928,0MUG2eCYGmj706dqxZThow
-    let mut points = [
-        Vec3::new(-10.0, -10.0, 20.0),
-        Vec3::new(-10.0, 10.0, 20.0),
-        Vec3::new(10.0, 10.0, 20.0),
-        Vec3::new(10.0, -10.0, 20.0),
-        Vec3::new(-10.0, -10.0, 5.0),
-        Vec3::new(-10.0, 10.0, 5.0),
-        Vec3::new(10.0, 10.0, 5.0),
-        Vec3::new(10.0, -10.0, 5.0),
-    ];
-    let quads = vec![
-        // back
-        ((0, 0.0, 0.0), (1, 0.0, th), (2, tw, th), (3, tw, 0.0)),
-        // left
-        ((0, 0.0, 0.0), (4, tw, 0.0), (5, tw, th), (1, 0.0, th)),
-        // right
-        ((3, 0.0, 0.0), (2, 0.0, th), (6, tw, th), (7, tw, 0.0)),
-        // top
-        ((0, 0.0, 0.0), (3, 0.0, th), (7, tw, th), (4, tw, 0.0)),
-        // bottom
-        ((1, 0.0, 0.0), (5, tw, 0.0), (6, tw, th), (2, 0.0, th)),
-    ];
+    // let mut points = [
+    //     Vec3::new(-10.0, -10.0, 20.0),
+    //     Vec3::new(-10.0, 10.0, 20.0),
+    //     Vec3::new(10.0, 10.0, 20.0),
+    //     Vec3::new(10.0, -10.0, 20.0),
+    //     Vec3::new(-10.0, -10.0, 5.0),
+    //     Vec3::new(-10.0, 10.0, 5.0),
+    //     Vec3::new(10.0, 10.0, 5.0),
+    //     Vec3::new(10.0, -10.0, 5.0),
+    // ];
+    let bitmap_wall = palette::read_pcx("assets/wall01.pcx");
+    let bitmap_floor = palette::read_pcx("assets/floor01.pcx");
+    let bitmaps = [&bitmap_wall, &bitmap_floor];
 
+    // #[rustfmt::skip]
+    // let quads = vec![
+    //     // back
+    //     ((0, 0.0, 0.0), (1, 0.0, th), (2, tw, th), (3, tw, 0.0), &bitmap_wall),
+    //     // left
+    //     ((0, 0.0, 0.0), (4, tw, 0.0), (5, tw, th), (1, 0.0, th), &bitmap_wall),
+    //     // right
+    //     ((3, 0.0, 0.0), (2, 0.0, th), (6, tw, th), (7, tw, 0.0), &bitmap_wall),
+    //     // top
+    //     ((0, 0.0, 0.0), (3, 0.0, th), (7, tw, th), (4, tw, 0.0), &bitmap_wall),
+    //     // bottom
+    //     ((1, 0.0, 0.0), (5, tw, 0.0), (6, tw, th), (2, 0.0, th), &bitmap_floor),
+    // ];
+
+    let floor = [
+        b"................",
+        b"................",
+        b"................",
+        b"................",
+        b"................",
+        b".....1111111....",
+        b".....1..........",
+        b".....1..........",
+        b".....1111.......",
+        b"........1.......",
+        b"........111.....",
+        b"........1.......",
+        b"........1.......",
+        b"........1.......",
+        b".11111111.......",
+        b"................",
+    ];
+    let mut level = level::Blockmap::new();
+    level.add(IVec3::ZERO, &floor);
+    let (points, quads) = level.get_polygons();
     // let mut new_triangle = VecDeque::new();
     let mut click_index = 0;
     let bitmap = palette::quantize(&palette, &test_texture::create());
-
-    let bitmap = palette::read_pcx("assets/wall01.pcx");
 
     let mut l = Vec3::new(0.0, 0.0, -13.0);
 
@@ -118,12 +143,12 @@ fn main() {
                     keycode: Option::Some(Keycode::Escape),
                     ..
                 } => break 'mainloop,
-                Event::MouseWheel { y, .. } => {
-                    let y = y as f32;
-                    for p in points[0..4].iter_mut() {
-                        p.z += y;
-                    }
-                }
+                // Event::MouseWheel { y, .. } => {
+                //     let y = y as f32;
+                //     for p in points[0..4].iter_mut() {
+                //         p.z += y;
+                //     }
+                // }
                 Event::KeyDown {
                     keycode: Some(keycode),
                     ..
@@ -172,12 +197,13 @@ fn main() {
 
         let mut color = 0x3b0103a5u32;
         let duplicate = 0xffaa55u32;
-        fb.framebuffer.fill(0x0u8);
+        // fb.framebuffer.fill(0x0u8);
+        fb.clear();
 
         let start = Instant::now();
         rasterize::rasterize::G_COUNT.store(0, std::sync::atomic::Ordering::SeqCst);
         let mut num_texel = 0;
-        for (p0, p1, p2, p3) in quads.iter().cloned() {
+        for (p0, p1, p2, p3, bi) in quads.iter().cloned() {
             color = (color << 1) | (color >> (32 - 1));
             let poly_indexed = [p0, p1, p2, p3];
             let mut poly = poly_indexed
@@ -208,9 +234,7 @@ fn main() {
             ];
             // let clipped_polygon = vec![transform(p0), transform(p1), transform(p2), transform(p3)]
             texpoly::draw_polygon(&poly[..], |x, y, z, u, v, aux| {
-                if x < 0 || x >= W as i32 || y < 0 || y >= H as i32 {
-                    panic!("out of bounds");
-                }
+                debug_assert!(x >= 0 && x < W as i32 && y >= 0 && y < H as i32);
                 let x = x as usize;
                 let y = y as usize;
                 let pixel_index = y * W as usize + x;
@@ -241,21 +265,25 @@ fn main() {
                     //     }
                     // }
                 } else {
-                    // let zmin = 10.0;
-                    // let zmax = 50.0;
-                    // let clamp_z = z.clamp(zmin, zmax);
-                    // let zfrac = (clamp_z - zmin) / (zmax - zmin);
-                    // let zi = 30 + (zfrac * 32.0) as usize;
-
-                    let zi = (z as usize).clamp(8, 72);
-                    let mi = 24 + (zi - 8) * 32 / 64;
+                    if z > fb.zbuffer[pixel_index] {
+                        return;
+                    }
+                    fb.zbuffer[pixel_index] = z;
+                    let zi = (31 + (z as usize / 2).saturating_sub(16)).min(47);
                     let u = u as usize % test_texture::TW;
                     let v = v as usize % test_texture::TH;
                     let texel_index = u + v * test_texture::TW;
-                    unsafe {
-                        *fb.framebuffer.get_unchecked_mut(pixel_index) =
-                            mapping_table[mi][*bitmap.get_unchecked(texel_index) as usize];
-                    };
+
+                    fb.framebuffer[pixel_index] =
+                        mapping_table[zi][bitmaps[bi][texel_index as usize] as usize];
+                    // debug_assert!(zi < palette::NUM_GAMMA_RAMP);
+                    // debug_assert!(pixel_index < fb.framebuffer.len());
+                    // debug_assert!(texel_index < bitmap.len());
+                    // unsafe {
+                    //     *fb.framebuffer.get_unchecked_mut(pixel_index) = *mapping_table
+                    //         .get_unchecked(zi)
+                    //         .get_unchecked(*bitmap.get_unchecked(texel_index) as usize);
+                    // };
                 }
                 num_texel += 1;
             });
