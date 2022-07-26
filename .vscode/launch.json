@@ -7,10 +7,48 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug unit tests in library 'rasterize'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=rasterize"
+                ],
+                "filter": {
+                    "name": "rasterize",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug executable 'rasterize'",
             "cargo": {
                 "args": [
                     "build",
+                    "--bin=rasterize",
+                    "--package=rasterize"
+                ],
+                "filter": {
+                    "name": "rasterize",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'rasterize'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
                     "--bin=rasterize",
                     "--package=rasterize"
                 ],
@@ -43,16 +81,90 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'rasterize'",
+            "name": "Debug unit tests in executable 'texture'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=rasterize",
+                    "--bin=texture",
                     "--package=rasterize"
                 ],
                 "filter": {
-                    "name": "rasterize",
+                    "name": "texture",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'indexed'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=indexed",
+                    "--package=rasterize"
+                ],
+                "filter": {
+                    "name": "indexed",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'indexed'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=indexed",
+                    "--package=rasterize"
+                ],
+                "filter": {
+                    "name": "indexed",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'texture_indexed'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=texture_indexed",
+                    "--package=rasterize"
+                ],
+                "filter": {
+                    "name": "texture_indexed",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'texture_indexed'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=texture_indexed",
+                    "--package=rasterize"
+                ],
+                "filter": {
+                    "name": "texture_indexed",
                     "kind": "bin"
                 }
             },

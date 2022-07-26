@@ -11,7 +11,8 @@ num-traits = "^0.2"
 sdl2 = "^0.34"
 glam = "^0.18"
 pcx = "0.2"
+lazy_static = "1"
 
-# [profile.release]
-# debug = true
+[profile.release]
+debug = true
 # lto = true
