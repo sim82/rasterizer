@@ -134,6 +134,7 @@ fn main() {
         &perspective_unproject,
     );
     println!("frustum: {:?}", frustum);
+    let mut proj = false;
     'mainloop: loop {
         let mut event_pump = sdl_context.event_pump().unwrap();
         for event in event_pump.poll_iter() {
@@ -160,6 +161,7 @@ fn main() {
                     // Keycode::W => l.z += 1.0,
                     // Keycode::S => l.z -= 1.0,
                     // Keycode::D => debug_overdraw = !debug_overdraw,
+                    Keycode::P => proj = !proj,
                     Keycode::T => draw_texels = !draw_texels,
                     Keycode::B => bayer_dither = !bayer_dither,
                     _ => (),
@@ -171,7 +173,7 @@ fn main() {
         let keyboard_state = event_pump.keyboard_state();
 
         let rot = glam::Mat3::from_rotation_y(-r);
-        let forward = rot * Vec3::new(0.0, 0.0, 0.5);
+        let forward = rot * Vec3::new(0.0, 0.0, -0.5);
         let right = rot * Vec3::new(0.5, 0.0, 0.0);
         if keyboard_state.is_scancode_pressed(sdl2::keyboard::Scancode::A) {
             l -= right;
@@ -200,9 +202,9 @@ fn main() {
         // fb.framebuffer.fill(0x0u8);
         fb.clear();
 
-        for y in 0..240 {
-            fb.framebuffer[(16 + y * W) as usize] = y as u8;
-        }
+        // for y in 0..240 {
+        //     fb.framebuffer[(16 + y * W) as usize] = y as u8;
+        // }
 
         let start = Instant::now();
         rasterize::rasterize::G_COUNT.store(0, std::sync::atomic::Ordering::SeqCst);
@@ -223,11 +225,28 @@ fn main() {
             if poly.len() < 3 {
                 continue;
             }
+            let project_mat = glam::Mat4::perspective_rh(
+                100.0 * std::f32::consts::PI / 180.0,
+                320.0 / 240.0,
+                0.1,
+                1000.0,
+            );
+
+            // let project_mat = glam::Mat4::orthographic_rh(0.0, 1.0, 0.0, 1.0, 0.1, 1000.0);
+
+            println!("proj: {:?}", project_mat);
             let poly = poly
                 .iter()
                 .map(|(p, t)| {
+                    let vp = project_mat.project_point3(*p);
                     let v = perspective_project(*p);
-                    (v.x, v.y, p.z, t.x, t.y)
+                    println!("{:?} {:?} {:?}", p, vp, v);
+
+                    if proj {
+                        (vp.x * 160.0 + 160.0, vp.y * 120.0 + 120.0, -p.z, t.x, t.y)
+                    } else {
+                        (v.x, v.y, p.z, t.x, t.y)
+                    }
                 })
                 .collect::<Vec<_>>();
 
@@ -238,6 +257,10 @@ fn main() {
             ];
             // let clipped_polygon = vec![transform(p0), transform(p1), transform(p2), transform(p3)]
             texpoly::draw_polygon(&poly[..], |x, y, z, u, v, aux| {
+                if !(x >= 0 && x < W as i32 && y >= 0 && y < H as i32) {
+                    return;
+                }
+
                 debug_assert!(x >= 0 && x < W as i32 && y >= 0 && y < H as i32);
                 let x = x as usize;
                 let y = y as usize;

@@ -227,5 +227,11 @@ where
             Vec3::ZERO,
         ));
     }
+    println!("frustum: {:?}", res);
+    // panic!();
+
+    for p in res.iter_mut() {
+        p.normal.z *= -1.0;
+    }
     res
 }

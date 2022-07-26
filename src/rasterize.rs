@@ -130,7 +130,7 @@ pub fn rasterize_polygon<P, G, S, M, D>(
     let mut slope_left = S::default();
     let mut slope_right = S::default();
 
-    let forwards = false;
+    let forwards = true;
     loop {
         let (cur_point, next_y, slope) = if !right_side {
             (&mut cur_point_left, &mut next_y_left, &mut slope_left)
