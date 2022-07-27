@@ -8,9 +8,9 @@ use sdl2::{
     Sdl, VideoSubsystem,
 };
 
-const WINDOW_SCALE: u32 = 2;
-const W: u32 = 424;
-const H: u32 = 240;
+const WINDOW_SCALE: u32 = 4;
+const W: i32 = 160;
+const H: i32 = 120;
 
 struct Engine {
     sdl_context: Sdl,
@@ -33,9 +33,12 @@ impl Engine {
         let sdl_context = sdl2::init().unwrap();
         let video_subsystem = sdl_context.video().unwrap();
         let window = video_subsystem
-            .window("rust-sdl2 demo: Video", W * WINDOW_SCALE, H * WINDOW_SCALE)
+            .window(
+                "rust-sdl2 demo: Video",
+                W as u32 * WINDOW_SCALE,
+                H as u32 * WINDOW_SCALE,
+            )
             .position_centered()
-            .resizable()
             .build()
             .map_err(|e| e.to_string())
             .unwrap();
@@ -156,11 +159,11 @@ fn main() {
         }
         if keyboard_state.is_scancode_pressed(Scancode::D) {
             player.x += dy;
-            player.y += dx;
+            player.y -= dx;
         }
         if keyboard_state.is_scancode_pressed(Scancode::A) {
             player.x -= dy;
-            player.y -= dx;
+            player.y += dx;
         }
         if keyboard_state.is_scancode_pressed(Scancode::Left) {
             player.a -= 4;
@@ -175,6 +178,13 @@ fn main() {
             }
         }
 
+        if keyboard_state.is_scancode_pressed(Scancode::R) {
+            player.z += 10;
+        }
+
+        if keyboard_state.is_scancode_pressed(Scancode::F) {
+            player.z -= 10;
+        }
         // engine.canvas.set_draw_color(Color::RGB(255, 128, 0));
         // engine.canvas.draw_point((100, 100)).unwrap();
         engine.canvas.set_draw_color(get_color(8));
@@ -183,6 +193,7 @@ fn main() {
             engine.draw_pixel(100, y + 100, y);
         }
 
+        engine.draw_pixel(W as i32 - 1, H as i32 - 1, 0);
         // engine.draw_pixel(player.x, player.y, 0);
         draw3d(&player, &mut engine);
         engine.canvas.present();
@@ -191,11 +202,37 @@ fn main() {
     }
 }
 
+fn draw_wall(x1: i32, x2: i32, b1: i32, b2: i32, t1: i32, t2: i32, engine: &mut Engine) {
+    // println!("{} {} {} {} {} {}", x1, x2, b1, b2, t1, t2);
+
+    let x1 = x1.max(1).min(W - 1);
+    let x2 = x2.max(1).min(W - 1);
+
+    let dyb = b2 - b1;
+    let dyt = t2 - t1;
+    let dx = x2 - x1;
+    let dx = if dx != 0 { dx } else { 1 };
+    let xs = x1;
+
+    for x in x1..x2 {
+        // let y1 = dyb * (((x - xs) as f32 + 0.5) / dx as f32 + b1 as f32) as i32;
+        let y1 = dyb * (x - xs) / dx + b1;
+        let y2 = dyt * (x - xs) / dx + t1;
+
+        let y1 = y1.max(1).min(H - 1);
+        let y2 = y2.max(1).min(H - 1);
+
+        for y in y1..y2 {
+            engine.draw_pixel(x, y, 0);
+        }
+    }
+}
+
 fn draw3d(player: &Player, engine: &mut Engine) {
     let cs = M_COS[player.a as usize];
     let sn = M_SIN[player.a as usize];
 
-    println!("{} {}", cs, sn);
+    // println!("{} {}", cs, sn);
 
     let x1 = 40.0 - player.x as f32;
     let y1 = 10.0 - player.y as f32;
@@ -206,24 +243,82 @@ fn draw3d(player: &Player, engine: &mut Engine) {
     // engine.draw_pixel(x1 as i32, y1 as i32, 3);
     // engine.draw_pixel(x2 as i32, y2 as i32, 4);
 
-    let mut wx = [x1 * cs - y1 * sn, x2 * cs - y2 * sn];
-    let mut wy = [y1 * cs + x1 * sn, y2 * cs + x2 * sn];
-    let mut wz = [0.0 - player.z as f32, 0.0 - player.z as f32];
+    // let wx = [
+    let mut wx0 = (x1 * cs - y1 * sn) as i32;
+    let mut wx1 = (x2 * cs - y2 * sn) as i32;
+    let mut wx2 = (x1 * cs - y1 * sn) as i32;
+    let mut wx3 = (x2 * cs - y2 * sn) as i32;
+    // ];
+    // let wy = [
+    let mut wy0 = (y1 * cs + x1 * sn) as i32;
+    let mut wy1 = (y2 * cs + x2 * sn) as i32;
+    let mut wy2 = (y1 * cs + x1 * sn) as i32;
+    let mut wy3 = (y2 * cs + x2 * sn) as i32;
+    // ];
+    let mut wz0 = 0 - player.z;
+    let mut wz1 = 0 - player.z;
+    let mut wz2 = 40 - player.z;
+    let mut wz3 = 40 - player.z;
 
-    const SW2: f32 = W as f32 / 2.0;
-    const SH2: f32 = H as f32 / 2.0;
+    if wy0 < 1 && wy1 < 1 {
+        return;
+    }
 
-    wx[0] = wx[0] * 200.0 / wy[0] + SW2;
-    wy[0] = wz[0] * 200.0 / wy[0] + SW2;
+    if wy0 < 1 {
+        clip_behind_player(&mut wx0, &mut wy0, &mut wz0, wx1, wy1, wz1);
+        clip_behind_player(&mut wx2, &mut wy2, &mut wz2, wx3, wy3, wz3);
+    }
 
-    wx[1] = wx[1] * 200.0 / wy[1] + SH2;
-    wy[1] = wz[1] * 200.0 / wy[1] + SH2;
+    if wy1 < 1 {
+        clip_behind_player(&mut wx1, &mut wy1, &mut wz1, wx0, wy0, wz0);
+        clip_behind_player(&mut wx3, &mut wy3, &mut wz3, wx2, wy2, wz2);
+    }
+
+    const SW2: i32 = W / 2;
+    const SH2: i32 = H / 2;
+
+    // screen pos
+    let sx = [
+        wx0 * 200 / wy0 + SW2,
+        wx1 * 200 / wy1 + SW2,
+        wx2 * 200 / wy2 + SW2,
+        wx3 * 200 / wy3 + SW2,
+    ];
+    let sy = [
+        wz0 * 200 / wy0 + SH2,
+        wz1 * 200 / wy1 + SH2,
+        wz2 * 200 / wy2 + SH2,
+        wz3 * 200 / wy3 + SH2,
+    ];
 
     // let wx = [x1, x2];
     // let wy = [y1, y2];
 
-    println!("{:?} {:?}", wx, wy);
+    // println!("{:?} {:?} {:?} {:?}", wx, wy, sx, sy);
 
-    engine.draw_pixel(wx[0] as i32, wy[0] as i32, 1);
-    engine.draw_pixel(wx[1] as i32, wy[1] as i32, 2);
+    // engine.draw_pixel(sx[0] as i32, sy[0] as i32, 1);
+    // engine.draw_pixel(sx[1] as i32, sy[1] as i32, 2);
+    draw_wall(
+        sx[0] as i32,
+        sx[1] as i32,
+        sy[0] as i32,
+        sy[1] as i32,
+        sy[2] as i32,
+        sy[3] as i32,
+        engine,
+    );
+}
+
+fn clip_behind_player(x1: &mut i32, y1: &mut i32, z1: &mut i32, x2: i32, y2: i32, z2: i32) {
+    let da = *y1 as f32;
+    let db = y2 as f32;
+    let d = da - db;
+    let d = if d != 0.0 { d } else { 1.0 };
+    let s = da / d;
+    *x1 = *x1 + (s * (x2 - *x1) as f32) as i32;
+    *y1 = *y1 + (s * (y2 - *y1) as f32) as i32;
+    if *y1 == 0 {
+        *y1 = 1
+    }
+    *z1 = *z1 + (s * (z2 - *z1) as f32) as i32;
 }
