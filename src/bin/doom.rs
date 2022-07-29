@@ -403,10 +403,7 @@ fn draw_wall(
     t1: i32,
     t2: i32,
     c: i32,
-    draw_state: DrawState,
-    surface_y: &mut [i32; W as usize],
-    c1: i32,
-    c2: i32,
+    draw_state: &mut DrawState,
     engine: &mut Engine,
 ) {
     // println!("{} {} {} {} {} {}", x1, x2, b1, b2, t1, t2);
@@ -429,22 +426,22 @@ fn draw_wall(
         let y2 = y2.max(1).min(H - 1);
 
         match draw_state {
-            DrawState::UpperContour => {
+            DrawState::UpperContour(_, surface_y) => {
                 surface_y[x as usize] = y1;
                 continue;
             }
-            DrawState::LowerContour => {
+            DrawState::LowerContour(_, surface_y) => {
                 surface_y[x as usize] = y2;
                 continue;
             }
-            DrawState::UpperFill => {
+            DrawState::UpperFill(c, surface_y) => {
                 for y in surface_y[x as usize]..y1 {
-                    engine.draw_pixel(x, y, c1);
+                    engine.draw_pixel(x, y, *c);
                 }
             }
-            DrawState::LowerFill => {
+            DrawState::LowerFill(c, surface_y) => {
                 for y in y2..surface_y[x as usize] {
-                    engine.draw_pixel(x, y, c2);
+                    engine.draw_pixel(x, y, *c);
                 }
             }
             _ => {}
@@ -460,39 +457,37 @@ type LineBuf = [i32; W as usize];
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 enum DrawState {
-    LowerContour,
-    UpperContour,
-    LowerFill,
-    UpperFill,
+    LowerContour(i32, LineBuf),
+    UpperContour(i32, LineBuf),
+    LowerFill(i32, LineBuf),
+    UpperFill(i32, LineBuf),
     Fill,
     Done,
 }
 
 impl DrawState {
-    pub fn next(&self) -> Self {
+    pub fn next(self) -> Self {
         match self {
-            DrawState::LowerContour => DrawState::LowerFill,
-            DrawState::UpperContour => DrawState::UpperFill,
+            DrawState::LowerContour(c, line_buf) => DrawState::LowerFill(c, line_buf),
+            DrawState::UpperContour(c, line_buf) => DrawState::UpperFill(c, line_buf),
             _ => DrawState::Done,
         }
     }
 }
 
 fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut Engine) {
-    let mut surf = [0; W as usize];
-
     for s in sectors.iter_mut() {
         s.d = 0;
 
         let mut draw_state = if player.z < s.z1 {
-            DrawState::UpperContour
+            DrawState::UpperContour(s.c1, [0; W as usize])
         } else if player.z > s.z2 {
-            DrawState::LowerContour
+            DrawState::LowerContour(s.c2, [0; W as usize])
         } else {
             DrawState::Fill
         };
         while draw_state != DrawState::Done {
-            println!("draw state: {:?}", draw_state);
+            // println!("draw state: {:?}", draw_state);
 
             for w in walls[s.wall_range.clone()].iter() {
                 let cs = M_COS[player.a as usize];
@@ -503,9 +498,12 @@ fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut 
                 let mut x2 = (w.x2 - player.x) as f32;
                 let mut y2 = (w.y2 - player.y) as f32;
 
-                if draw_state == DrawState::LowerContour || draw_state == DrawState::UpperContour {
-                    std::mem::swap(&mut x1, &mut x2);
-                    std::mem::swap(&mut y1, &mut y2);
+                match draw_state {
+                    DrawState::LowerContour(_, _) | DrawState::UpperContour(_, _) => {
+                        std::mem::swap(&mut x1, &mut x2);
+                        std::mem::swap(&mut y1, &mut y2);
+                    }
+                    _ => (),
                 }
 
                 s.d += dist(player.x, player.y, (w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2);
@@ -571,10 +569,7 @@ fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut 
                     sy[2] as i32,
                     sy[3] as i32,
                     w.c,
-                    draw_state,
-                    &mut surf,
-                    s.c1,
-                    s.c2,
+                    &mut draw_state,
                     engine,
                 );
             }
