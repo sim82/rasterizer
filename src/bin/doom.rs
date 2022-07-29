@@ -484,13 +484,13 @@ fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut 
             // println!("draw state: {:?}", draw_state);
 
             for w in walls[s.wall_range.clone()].iter() {
-                let cs = M_COS[player.a as usize];
-                let sn = M_SIN[player.a as usize];
+                let cs = (M_COS[player.a as usize] * 255.0 * 255.0) as i32;
+                let sn = (M_SIN[player.a as usize] * 255.0 * 255.0) as i32;
 
-                let mut x1 = (w.x1 - player.x) as f32;
-                let mut y1 = (w.y1 - player.y) as f32;
-                let mut x2 = (w.x2 - player.x) as f32;
-                let mut y2 = (w.y2 - player.y) as f32;
+                let mut x1 = (w.x1 - player.x);
+                let mut y1 = (w.y1 - player.y);
+                let mut x2 = (w.x2 - player.x);
+                let mut y2 = (w.y2 - player.y);
 
                 match draw_state {
                     DrawState::LowerContour(_, _) | DrawState::UpperContour(_, _) => {
@@ -502,15 +502,15 @@ fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut 
 
                 s.d += dist(player.x, player.y, (w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2);
 
-                let mut wx0 = (x1 * cs - y1 * sn) as i32;
-                let mut wx1 = (x2 * cs - y2 * sn) as i32;
-                let mut wx2 = (x1 * cs - y1 * sn) as i32;
-                let mut wx3 = (x2 * cs - y2 * sn) as i32;
+                let mut wx0 = (x1 * cs - y1 * sn) as i32 / 0xffff;
+                let mut wx1 = (x2 * cs - y2 * sn) as i32 / 0xffff;
+                let mut wx2 = (x1 * cs - y1 * sn) as i32 / 0xffff;
+                let mut wx3 = (x2 * cs - y2 * sn) as i32 / 0xffff;
 
-                let mut wy0 = (y1 * cs + x1 * sn) as i32;
-                let mut wy1 = (y2 * cs + x2 * sn) as i32;
-                let mut wy2 = (y1 * cs + x1 * sn) as i32;
-                let mut wy3 = (y2 * cs + x2 * sn) as i32;
+                let mut wy0 = (y1 * cs + x1 * sn) as i32 / 0xffff;
+                let mut wy1 = (y2 * cs + x2 * sn) as i32 / 0xffff;
+                let mut wy2 = (y1 * cs + x1 * sn) as i32 / 0xffff;
+                let mut wy3 = (y2 * cs + x2 * sn) as i32 / 0xffff;
 
                 let mut wz0 = s.z1 - player.z + (player.l * wy0) / 32;
                 let mut wz1 = s.z1 - player.z + (player.l * wy1) / 32;
