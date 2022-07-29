@@ -110,6 +110,30 @@ impl Player {
     }
 }
 
+struct Wall {
+    x1: i32,
+    x2: i32,
+    y1: i32,
+    y2: i32,
+    c: i32,
+}
+
+#[derive(Default)]
+struct Sector {
+    wall_range: std::ops::Range<usize>,
+    z1: i32,
+    z2: i32,
+    x: i32,
+    y: i32,
+    d: i32,
+}
+
+fn dist(x1: i32, y1: i32, x2: i32, y2: i32) -> i32 {
+    let xd = x2 - x1;
+    let yd = y2 - y1;
+    ((xd * xd + yd * yd) as f32).sqrt() as i32
+}
+
 fn sin_cos_table() -> ([f32; 360], [f32; 360]) {
     let mut s = [0.0; 360];
     let mut c = [0.0; 360];
@@ -129,6 +153,155 @@ fn main() {
     let mut engine = Engine::new();
 
     let mut player = Player::new();
+
+    let walls = [
+        // sector 0
+        Wall {
+            x1: 0,
+            y1: 0,
+            x2: 32,
+            y2: 0,
+            c: 0,
+        },
+        Wall {
+            x1: 32,
+            y1: 0,
+            x2: 32,
+            y2: 32,
+            c: 1,
+        },
+        Wall {
+            x1: 32,
+            y1: 32,
+            x2: 0,
+            y2: 32,
+            c: 0,
+        },
+        Wall {
+            x1: 0,
+            y1: 32,
+            x2: 0,
+            y2: 0,
+            c: 1,
+        },
+        // sector 1
+        Wall {
+            x1: 0 + 64,
+            y1: 0,
+            x2: 32 + 64,
+            y2: 0,
+            c: 2,
+        },
+        Wall {
+            x1: 32 + 64,
+            y1: 0,
+            x2: 32 + 64,
+            y2: 32,
+            c: 3,
+        },
+        Wall {
+            x1: 32 + 64,
+            y1: 32,
+            x2: 0 + 64,
+            y2: 32,
+            c: 2,
+        },
+        Wall {
+            x1: 0 + 64,
+            y1: 32,
+            x2: 0 + 64,
+            y2: 0,
+            c: 3,
+        },
+        // sector 2
+        Wall {
+            x1: 0 + 64,
+            y1: 0 + 64,
+            x2: 32 + 64,
+            y2: 0 + 64,
+            c: 4,
+        },
+        Wall {
+            x1: 32 + 64,
+            y1: 0 + 64,
+            x2: 32 + 64,
+            y2: 32 + 64,
+            c: 5,
+        },
+        Wall {
+            x1: 32 + 64,
+            y1: 32 + 64,
+            x2: 0 + 64,
+            y2: 32 + 64,
+            c: 4,
+        },
+        Wall {
+            x1: 0 + 64,
+            y1: 32 + 64,
+            x2: 0 + 64,
+            y2: 0 + 64,
+            c: 5,
+        },
+        // sector 3
+        Wall {
+            x1: 0,
+            y1: 0 + 64,
+            x2: 32,
+            y2: 0 + 64,
+            c: 6,
+        },
+        Wall {
+            x1: 32,
+            y1: 0 + 64,
+            x2: 32,
+            y2: 32 + 64,
+            c: 7,
+        },
+        Wall {
+            x1: 32,
+            y1: 32 + 64,
+            x2: 0,
+            y2: 32 + 64,
+            c: 6,
+        },
+        Wall {
+            x1: 0,
+            y1: 32 + 64,
+            x2: 0,
+            y2: 0 + 64,
+            c: 7,
+        },
+    ];
+    let mut sectors = [
+        Sector {
+            wall_range: 0..4,
+            z1: 0,
+            z2: 40,
+            d: 0,
+            ..Default::default()
+        },
+        Sector {
+            wall_range: 4..8,
+            z1: 0,
+            z2: 40,
+            d: 0,
+            ..Default::default()
+        },
+        Sector {
+            wall_range: 8..12,
+            z1: 0,
+            z2: 40,
+            d: 0,
+            ..Default::default()
+        },
+        Sector {
+            wall_range: 12..16,
+            z1: 0,
+            z2: 40,
+            d: 0,
+            ..Default::default()
+        },
+    ];
 
     'mainloop: loop {
         let mut event_pump = engine.sdl_context.event_pump().unwrap();
@@ -195,14 +368,15 @@ fn main() {
 
         engine.draw_pixel(W as i32 - 1, H as i32 - 1, 0);
         // engine.draw_pixel(player.x, player.y, 0);
-        draw3d(&player, &mut engine);
+
+        draw3d(&player, &mut sectors, &walls, &mut engine);
         engine.canvas.present();
 
         std::thread::sleep(std::time::Duration::from_millis(16));
     }
 }
 
-fn draw_wall(x1: i32, x2: i32, b1: i32, b2: i32, t1: i32, t2: i32, engine: &mut Engine) {
+fn draw_wall(x1: i32, x2: i32, b1: i32, b2: i32, t1: i32, t2: i32, c: i32, engine: &mut Engine) {
     // println!("{} {} {} {} {} {}", x1, x2, b1, b2, t1, t2);
 
     let x1 = x1.max(1).min(W - 1);
@@ -223,12 +397,111 @@ fn draw_wall(x1: i32, x2: i32, b1: i32, b2: i32, t1: i32, t2: i32, engine: &mut 
         let y2 = y2.max(1).min(H - 1);
 
         for y in y1..y2 {
-            engine.draw_pixel(x, y, 0);
+            engine.draw_pixel(x, y, c);
         }
     }
 }
 
-fn draw3d(player: &Player, engine: &mut Engine) {
+fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut Engine) {
+    for s in sectors.iter_mut() {
+        s.d = 0;
+        for w in walls[s.wall_range.clone()].iter() {
+            let cs = M_COS[player.a as usize];
+            let sn = M_SIN[player.a as usize];
+
+            // println!("{} {}", cs, sn);
+
+            let x1 = (w.x1 - player.x) as f32;
+            let y1 = (w.y1 - player.y) as f32;
+            let x2 = (w.x2 - player.x) as f32;
+            let y2 = (w.y2 - player.y) as f32;
+
+            //let dist = dist(x1 as i32, y1 as i32, x2 as i32, y2 as i32);
+            // let dist = (x1 * x1 + y1 * y1) + (x2 * x2 + y2 * y2);
+            s.d += dist(player.x, player.y, (w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2);
+            // println!("dist: {} {} {} {} {}", dist, x1, y1, x2, y2);
+            // engine.draw_pixel(x1 as i32, y1 as i32, 3);
+            // engine.draw_pixel(x2 as i32, y2 as i32, 4);
+
+            // let wx = [
+            let mut wx0 = (x1 * cs - y1 * sn) as i32;
+            let mut wx1 = (x2 * cs - y2 * sn) as i32;
+            let mut wx2 = (x1 * cs - y1 * sn) as i32;
+            let mut wx3 = (x2 * cs - y2 * sn) as i32;
+            // ];
+            // let wy = [
+            let mut wy0 = (y1 * cs + x1 * sn) as i32;
+            let mut wy1 = (y2 * cs + x2 * sn) as i32;
+            let mut wy2 = (y1 * cs + x1 * sn) as i32;
+            let mut wy3 = (y2 * cs + x2 * sn) as i32;
+            // ];
+            let mut wz0 = s.z1 - player.z;
+            let mut wz1 = s.z1 - player.z;
+            let mut wz2 = s.z2 - player.z;
+            let mut wz3 = s.z2 - player.z;
+
+            if wy0 < 1 && wy1 < 1 {
+                continue;
+            }
+
+            if wy0 < 1 {
+                clip_behind_player(&mut wx0, &mut wy0, &mut wz0, wx1, wy1, wz1);
+                clip_behind_player(&mut wx2, &mut wy2, &mut wz2, wx3, wy3, wz3);
+            }
+
+            if wy1 < 1 {
+                clip_behind_player(&mut wx1, &mut wy1, &mut wz1, wx0, wy0, wz0);
+                clip_behind_player(&mut wx3, &mut wy3, &mut wz3, wx2, wy2, wz2);
+            }
+
+            const SW2: i32 = W / 2;
+            const SH2: i32 = H / 2;
+
+            // screen pos
+            let sx = [
+                wx0 * 200 / wy0 + SW2,
+                wx1 * 200 / wy1 + SW2,
+                wx2 * 200 / wy2 + SW2,
+                wx3 * 200 / wy3 + SW2,
+            ];
+            let sy = [
+                wz0 * 200 / wy0 + SH2,
+                wz1 * 200 / wy1 + SH2,
+                wz2 * 200 / wy2 + SH2,
+                wz3 * 200 / wy3 + SH2,
+            ];
+
+            // let wx = [x1, x2];
+            // let wy = [y1, y2];
+
+            // println!("{:?} {:?} {:?} {:?}", wx, wy, sx, sy);
+
+            // engine.draw_pixel(sx[0] as i32, sy[0] as i32, 1);
+            // engine.draw_pixel(sx[1] as i32, sy[1] as i32, 2);
+            draw_wall(
+                sx[0] as i32,
+                sx[1] as i32,
+                sy[0] as i32,
+                sy[1] as i32,
+                sy[2] as i32,
+                sy[3] as i32,
+                w.c,
+                engine,
+            );
+        }
+        // println!("d: {}", s.d);
+
+        s.d /= s.wall_range.len() as i32;
+    }
+
+    sectors.sort_by(|s1, s2| s2.d.cmp(&s1.d));
+    // println!("sector order: ");
+    for s in sectors.iter() {
+        println!("{:?}", s.wall_range);
+    }
+}
+
+fn draw3d_test(player: &Player, engine: &mut Engine) {
     let cs = M_COS[player.a as usize];
     let sn = M_SIN[player.a as usize];
 
@@ -305,6 +578,7 @@ fn draw3d(player: &Player, engine: &mut Engine) {
         sy[1] as i32,
         sy[2] as i32,
         sy[3] as i32,
+        0,
         engine,
     );
 }
