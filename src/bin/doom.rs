@@ -403,7 +403,7 @@ fn draw_wall(
     t1: i32,
     t2: i32,
     c: i32,
-    surface: i32,
+    draw_state: DrawState,
     surface_y: &mut [i32; W as usize],
     c1: i32,
     c2: i32,
@@ -428,21 +428,21 @@ fn draw_wall(
         let y1 = y1.max(1).min(H - 1);
         let y2 = y2.max(1).min(H - 1);
 
-        match surface {
-            1 => {
+        match draw_state {
+            DrawState::UpperContour => {
                 surface_y[x as usize] = y1;
                 continue;
             }
-            2 => {
+            DrawState::LowerContour => {
                 surface_y[x as usize] = y2;
                 continue;
             }
-            -1 => {
+            DrawState::UpperFill => {
                 for y in surface_y[x as usize]..y1 {
                     engine.draw_pixel(x, y, c1);
                 }
             }
-            -2 => {
+            DrawState::LowerFill => {
                 for y in y2..surface_y[x as usize] {
                     engine.draw_pixel(x, y, c2);
                 }
@@ -456,21 +456,44 @@ fn draw_wall(
     }
 }
 
+type LineBuf = [i32; W as usize];
+
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+enum DrawState {
+    LowerContour,
+    UpperContour,
+    LowerFill,
+    UpperFill,
+    Fill,
+    Done,
+}
+
+impl DrawState {
+    pub fn next(&self) -> Self {
+        match self {
+            DrawState::LowerContour => DrawState::LowerFill,
+            DrawState::UpperContour => DrawState::UpperFill,
+            _ => DrawState::Done,
+        }
+    }
+}
+
 fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut Engine) {
     let mut surf = [0; W as usize];
 
     for s in sectors.iter_mut() {
         s.d = 0;
 
-        let mut surface = if player.z < s.z1 {
-            1
+        let mut draw_state = if player.z < s.z1 {
+            DrawState::UpperContour
         } else if player.z > s.z2 {
-            2
+            DrawState::LowerContour
         } else {
-            0
+            DrawState::Fill
         };
+        while draw_state != DrawState::Done {
+            println!("draw state: {:?}", draw_state);
 
-        for l in 0..=1 {
             for w in walls[s.wall_range.clone()].iter() {
                 let cs = M_COS[player.a as usize];
                 let sn = M_SIN[player.a as usize];
@@ -480,7 +503,7 @@ fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut 
                 let mut x2 = (w.x2 - player.x) as f32;
                 let mut y2 = (w.y2 - player.y) as f32;
 
-                if l == 0 {
+                if draw_state == DrawState::LowerContour || draw_state == DrawState::UpperContour {
                     std::mem::swap(&mut x1, &mut x2);
                     std::mem::swap(&mut y1, &mut y2);
                 }
@@ -548,7 +571,7 @@ fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut 
                     sy[2] as i32,
                     sy[3] as i32,
                     w.c,
-                    surface,
+                    draw_state,
                     &mut surf,
                     s.c1,
                     s.c2,
@@ -556,7 +579,7 @@ fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut 
                 );
             }
 
-            surface = -surface;
+            draw_state = draw_state.next();
         }
         // println!("d: {}", s.d);
 
@@ -568,93 +591,6 @@ fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut 
     for s in sectors.iter() {
         println!("{:?}", s.wall_range);
     }
-}
-
-fn draw3d_test(player: &Player, engine: &mut Engine) {
-    let cs = M_COS[player.a as usize];
-    let sn = M_SIN[player.a as usize];
-
-    // println!("{} {}", cs, sn);
-
-    let x1 = 40.0 - player.x as f32;
-    let y1 = 10.0 - player.y as f32;
-
-    let x2 = 40.0 - player.x as f32;
-    let y2 = 290.0 - player.y as f32;
-
-    // engine.draw_pixel(x1 as i32, y1 as i32, 3);
-    // engine.draw_pixel(x2 as i32, y2 as i32, 4);
-
-    // let wx = [
-    let mut wx0 = (x1 * cs - y1 * sn) as i32;
-    let mut wx1 = (x2 * cs - y2 * sn) as i32;
-    let mut wx2 = (x1 * cs - y1 * sn) as i32;
-    let mut wx3 = (x2 * cs - y2 * sn) as i32;
-    // ];
-    // let wy = [
-    let mut wy0 = (y1 * cs + x1 * sn) as i32;
-    let mut wy1 = (y2 * cs + x2 * sn) as i32;
-    let mut wy2 = (y1 * cs + x1 * sn) as i32;
-    let mut wy3 = (y2 * cs + x2 * sn) as i32;
-    // ];
-    let mut wz0 = 0 - player.z;
-    let mut wz1 = 0 - player.z;
-    let mut wz2 = 40 - player.z;
-    let mut wz3 = 40 - player.z;
-
-    if wy0 < 1 && wy1 < 1 {
-        return;
-    }
-
-    if wy0 < 1 {
-        clip_behind_player(&mut wx0, &mut wy0, &mut wz0, wx1, wy1, wz1);
-        clip_behind_player(&mut wx2, &mut wy2, &mut wz2, wx3, wy3, wz3);
-    }
-
-    if wy1 < 1 {
-        clip_behind_player(&mut wx1, &mut wy1, &mut wz1, wx0, wy0, wz0);
-        clip_behind_player(&mut wx3, &mut wy3, &mut wz3, wx2, wy2, wz2);
-    }
-
-    const SW2: i32 = W / 2;
-    const SH2: i32 = H / 2;
-
-    // screen pos
-    let sx = [
-        wx0 * 200 / wy0 + SW2,
-        wx1 * 200 / wy1 + SW2,
-        wx2 * 200 / wy2 + SW2,
-        wx3 * 200 / wy3 + SW2,
-    ];
-    let sy = [
-        wz0 * 200 / wy0 + SH2,
-        wz1 * 200 / wy1 + SH2,
-        wz2 * 200 / wy2 + SH2,
-        wz3 * 200 / wy3 + SH2,
-    ];
-
-    // let wx = [x1, x2];
-    // let wy = [y1, y2];
-
-    // println!("{:?} {:?} {:?} {:?}", wx, wy, sx, sy);
-
-    // engine.draw_pixel(sx[0] as i32, sy[0] as i32, 1);
-    // engine.draw_pixel(sx[1] as i32, sy[1] as i32, 2);
-    let mut surf_y = [0; W as usize];
-    draw_wall(
-        sx[0] as i32,
-        sx[1] as i32,
-        sy[0] as i32,
-        sy[1] as i32,
-        sy[2] as i32,
-        sy[3] as i32,
-        0,
-        0,
-        &mut surf_y,
-        0,
-        0,
-        engine,
-    );
 }
 
 fn clip_behind_player(x1: &mut i32, y1: &mut i32, z1: &mut i32, x2: i32, y2: i32, z2: i32) {
