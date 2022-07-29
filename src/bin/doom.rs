@@ -379,14 +379,14 @@ fn main() {
 fn draw_wall(x1: i32, x2: i32, b1: i32, b2: i32, t1: i32, t2: i32, c: i32, engine: &mut Engine) {
     // println!("{} {} {} {} {} {}", x1, x2, b1, b2, t1, t2);
 
-    let x1 = x1.max(1).min(W - 1);
-    let x2 = x2.max(1).min(W - 1);
-
     let dyb = b2 - b1;
     let dyt = t2 - t1;
     let dx = x2 - x1;
     let dx = if dx != 0 { dx } else { 1 };
     let xs = x1;
+
+    let x1 = x1.max(1).min(W - 1);
+    let x2 = x2.max(1).min(W - 1);
 
     for x in x1..x2 {
         // let y1 = dyb * (((x - xs) as f32 + 0.5) / dx as f32 + b1 as f32) as i32;
