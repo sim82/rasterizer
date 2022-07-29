@@ -2,10 +2,10 @@ use lazy_static::lazy_static;
 use sdl2::{
     event::Event,
     keyboard::{Keycode, Scancode},
-    pixels::{Color, PixelFormatEnum},
-    render::{Canvas, Texture, TextureCreator},
-    video::{Window, WindowContext},
-    Sdl, VideoSubsystem,
+    pixels::Color,
+    render::Canvas,
+    video::Window,
+    Sdl,
 };
 
 const WINDOW_SCALE: u32 = 4;
@@ -14,22 +14,12 @@ const H: i32 = 120;
 
 struct Engine {
     sdl_context: Sdl,
-    video_subsystem: VideoSubsystem,
     canvas: Canvas<Window>,
     current_color: Option<i32>,
-    // texture_creator: TextureCreator<WindowContext>,
-}
-
-struct MyCanvas<'a> {
-    engine: &'a Engine,
-    texture: Texture<'a>,
-    pixels: Vec<u32>,
 }
 
 impl Engine {
     pub fn new() -> Self {
-        let blank = 0x0u32;
-
         let sdl_context = sdl2::init().unwrap();
         let video_subsystem = sdl_context.video().unwrap();
         let window = video_subsystem
@@ -57,12 +47,8 @@ impl Engine {
 
         Self {
             sdl_context,
-            video_subsystem,
             canvas,
             current_color: None,
-            // texture_creator,
-            // texture,
-            // pixels,
         }
     }
     pub fn draw_pixel(&mut self, x: i32, y: i32, color_index: i32) {
@@ -96,6 +82,7 @@ struct Player {
     z: i32,
     a: i32,
     l: i32,
+    p: bool,
 }
 
 impl Player {
@@ -106,6 +93,7 @@ impl Player {
             z: 20,
             a: 0,
             l: 0,
+            p: false,
         }
     }
 }
@@ -123,12 +111,9 @@ struct Sector {
     wall_range: std::ops::Range<usize>,
     z1: i32,
     z2: i32,
-    x: i32,
-    y: i32,
     d: i32,
     c1: i32,
     c2: i32,
-    // surf: [i32; W as usize],
 }
 
 fn dist(x1: i32, y1: i32, x2: i32, y2: i32) -> i32 {
@@ -156,7 +141,7 @@ fn main() {
     let mut engine = Engine::new();
 
     let mut player = Player::new();
-
+    #[allow(clippy::identity_op)]
     let walls = [
         // sector 0
         Wall {
@@ -283,7 +268,6 @@ fn main() {
             d: 0,
             c1: 7,
             c2: 5,
-            ..Default::default()
         },
         Sector {
             wall_range: 4..8,
@@ -292,7 +276,6 @@ fn main() {
             d: 0,
             c1: 3,
             c2: 1,
-            ..Default::default()
         },
         Sector {
             wall_range: 8..12,
@@ -301,7 +284,6 @@ fn main() {
             d: 0,
             c1: 6,
             c2: 4,
-            ..Default::default()
         },
         Sector {
             wall_range: 12..16,
@@ -310,7 +292,6 @@ fn main() {
             d: 0,
             c1: 2,
             c2: 0,
-            ..Default::default()
         },
     ];
 
@@ -326,8 +307,6 @@ fn main() {
                 _ => {}
             }
         }
-
-        let keyboard_state = event_pump.keyboard_state();
 
         let dx = (M_SIN[player.a as usize] * 10.0) as i32;
         let dy = (M_COS[player.a as usize] * 10.0) as i32;
@@ -361,23 +340,20 @@ fn main() {
                 player.a -= 360
             }
         }
-
         if keyboard_state.is_scancode_pressed(Scancode::R) {
-            player.z += 10;
-        }
-
-        if keyboard_state.is_scancode_pressed(Scancode::F) {
             player.z -= 10;
         }
-        if keyboard_state.is_scancode_pressed(Scancode::T) {
-            player.l -= 1;
+        if keyboard_state.is_scancode_pressed(Scancode::F) {
+            player.z += 10;
         }
-        if keyboard_state.is_scancode_pressed(Scancode::G) {
+        if keyboard_state.is_scancode_pressed(Scancode::T) {
             player.l += 1;
         }
+        if keyboard_state.is_scancode_pressed(Scancode::G) {
+            player.l -= 1;
+        }
+        player.p = keyboard_state.is_scancode_pressed(Scancode::P);
 
-        // engine.canvas.set_draw_color(Color::RGB(255, 128, 0));
-        // engine.canvas.draw_point((100, 100)).unwrap();
         engine.canvas.set_draw_color(get_color(8));
         engine.canvas.clear();
         for y in 0..8 {
@@ -405,6 +381,7 @@ fn draw_wall(
     c: i32,
     draw_state: &mut DrawState,
     engine: &mut Engine,
+    prec: bool,
 ) {
     // println!("{} {} {} {} {} {}", x1, x2, b1, b2, t1, t2);
 
@@ -419,8 +396,23 @@ fn draw_wall(
 
     for x in x1..x2 {
         // let y1 = dyb * (((x - xs) as f32 + 0.5) / dx as f32 + b1 as f32) as i32;
-        let y1 = dyb * (x - xs) / dx + b1;
-        let y2 = dyt * (x - xs) / dx + t1;
+
+        let (y1, y2) = if !prec {
+            let y1 = dyb * (x - xs) / dx + b1;
+            let y2 = dyt * (x - xs) / dx + t1;
+            (y1, y2)
+        } else {
+            // let y1 = (dyb as f32 * ((x - xs) as f32 + 0.5) / dx as f32 + b1 as f32) as i32;
+            // let y2 = (dyt as f32 * ((x - xs) as f32 + 0.5) / dx as f32 + t1 as f32) as i32;
+
+            // let y1 = dyb * 2 * ((x - xs) * 2 + 1) / (dx * 4) + b1;
+            // let y2 = dyt * 2 * ((x - xs) * 2 + 1) / (dx * 4) + t1;
+
+            let y1 = (dyb * (x - xs) + dyb / 2) / dx + b1;
+            let y2 = (dyt * (x - xs) + dyt / 2) / dx + t1;
+
+            (y1, y2)
+        };
 
         let y1 = y1.max(1).min(H - 1);
         let y2 = y2.max(1).min(H - 1);
@@ -455,17 +447,17 @@ fn draw_wall(
 
 type LineBuf = [i32; W as usize];
 
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
-enum DrawState {
-    LowerContour(i32, LineBuf),
-    UpperContour(i32, LineBuf),
-    LowerFill(i32, LineBuf),
-    UpperFill(i32, LineBuf),
+#[derive(Debug)]
+enum DrawState<'a> {
+    LowerContour(i32, &'a mut LineBuf),
+    UpperContour(i32, &'a mut LineBuf),
+    LowerFill(i32, &'a LineBuf),
+    UpperFill(i32, &'a LineBuf),
     Fill,
     Done,
 }
 
-impl DrawState {
+impl<'a> DrawState<'a> {
     pub fn next(self) -> Self {
         match self {
             DrawState::LowerContour(c, line_buf) => DrawState::LowerFill(c, line_buf),
@@ -476,17 +468,19 @@ impl DrawState {
 }
 
 fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut Engine) {
+    println!("prec: {:?}", player.p);
+    let mut line_buf = [0; W as usize];
     for s in sectors.iter_mut() {
         s.d = 0;
 
         let mut draw_state = if player.z < s.z1 {
-            DrawState::UpperContour(s.c1, [0; W as usize])
+            DrawState::UpperContour(s.c1, &mut line_buf)
         } else if player.z > s.z2 {
-            DrawState::LowerContour(s.c2, [0; W as usize])
+            DrawState::LowerContour(s.c2, &mut line_buf)
         } else {
             DrawState::Fill
         };
-        while draw_state != DrawState::Done {
+        while !matches!(draw_state, DrawState::Done) {
             // println!("draw state: {:?}", draw_state);
 
             for w in walls[s.wall_range.clone()].iter() {
@@ -541,51 +535,34 @@ fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut 
                 const SH2: i32 = H / 2;
 
                 // screen pos
-                let sx = [
-                    wx0 * 200 / wy0 + SW2,
-                    wx1 * 200 / wy1 + SW2,
-                    wx2 * 200 / wy2 + SW2,
-                    wx3 * 200 / wy3 + SW2,
-                ];
-                let sy = [
-                    wz0 * 200 / wy0 + SH2,
-                    wz1 * 200 / wy1 + SH2,
-                    wz2 * 200 / wy2 + SH2,
-                    wz3 * 200 / wy3 + SH2,
-                ];
+                let sx0 = wx0 * 200 / wy0 + SW2;
+                let sx1 = wx1 * 200 / wy1 + SW2;
 
-                // let wx = [x1, x2];
-                // let wy = [y1, y2];
+                let sy0 = wz0 * 200 / wy0 + SH2;
+                let sy1 = wz1 * 200 / wy1 + SH2;
+                let sy2 = wz2 * 200 / wy2 + SH2;
+                let sy3 = wz3 * 200 / wy3 + SH2;
 
-                // println!("{:?} {:?} {:?} {:?}", wx, wy, sx, sy);
-
-                // engine.draw_pixel(sx[0] as i32, sy[0] as i32, 1);
-                // engine.draw_pixel(sx[1] as i32, sy[1] as i32, 2);
                 draw_wall(
-                    sx[0] as i32,
-                    sx[1] as i32,
-                    sy[0] as i32,
-                    sy[1] as i32,
-                    sy[2] as i32,
-                    sy[3] as i32,
+                    sx0,
+                    sx1,
+                    sy0,
+                    sy1,
+                    sy2,
+                    sy3,
                     w.c,
                     &mut draw_state,
                     engine,
+                    player.p,
                 );
             }
 
             draw_state = draw_state.next();
         }
-        // println!("d: {}", s.d);
 
         s.d /= s.wall_range.len() as i32;
     }
-
     sectors.sort_by(|s1, s2| s2.d.cmp(&s1.d));
-    // println!("sector order: ");
-    for s in sectors.iter() {
-        println!("{:?}", s.wall_range);
-    }
 }
 
 fn clip_behind_player(x1: &mut i32, y1: &mut i32, z1: &mut i32, x2: i32, y2: i32, z2: i32) {
