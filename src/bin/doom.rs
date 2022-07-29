@@ -8,9 +8,18 @@ use sdl2::{
     Sdl,
 };
 
-const WINDOW_SCALE: u32 = 4;
-const W: i32 = 160;
-const H: i32 = 120;
+// const WINDOW_SCALE: u32 = 4;
+// const W: i32 = 160;
+// const H: i32 = 120;
+// const PERSPECTIVE_MUL: i32 = 200;
+
+const WINDOW_SCALE: u32 = 3;
+const W: i32 = 320;
+const H: i32 = 240;
+const PERSPECTIVE_MUL: i32 = 400;
+
+const FIXPOINT_BIAS: i32 = 0xfff;
+const FIXPOINT_MUL: f32 = (FIXPOINT_BIAS + 1) as f32;
 
 struct Engine {
     sdl_context: Sdl,
@@ -136,6 +145,8 @@ fn sin_cos_table() -> ([f32; 360], [f32; 360]) {
 lazy_static! {
     static ref M_SIN: [f32; 360] = sin_cos_table().0;
     static ref M_COS: [f32; 360] = sin_cos_table().1;
+    static ref M_SIN_FP: [i32; 360] = sin_cos_table().0.map(|v| (v * FIXPOINT_MUL) as i32);
+    static ref M_COS_FP: [i32; 360] = sin_cos_table().1.map(|v| (v * FIXPOINT_MUL) as i32);
 }
 fn main() {
     let mut engine = Engine::new();
@@ -361,7 +372,6 @@ fn main() {
         }
 
         engine.draw_pixel(W as i32 - 1, H as i32 - 1, 0);
-        // engine.draw_pixel(player.x, player.y, 0);
 
         draw3d(&player, &mut sectors, &walls, &mut engine);
         engine.canvas.present();
@@ -397,7 +407,9 @@ fn draw_wall(
     for x in x1..x2 {
         // let y1 = dyb * (((x - xs) as f32 + 0.5) / dx as f32 + b1 as f32) as i32;
 
-        let (y1, y2) = if !prec {
+        let (y1, y2) = if
+        /* !prec */
+        false {
             let y1 = dyb * (x - xs) / dx + b1;
             let y2 = dyt * (x - xs) / dx + t1;
             (y1, y2)
@@ -484,13 +496,13 @@ fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut 
             // println!("draw state: {:?}", draw_state);
 
             for w in walls[s.wall_range.clone()].iter() {
-                let cs = (M_COS[player.a as usize] * 255.0 * 255.0) as i32;
-                let sn = (M_SIN[player.a as usize] * 255.0 * 255.0) as i32;
+                let cs = M_COS_FP[player.a as usize];
+                let sn = M_SIN_FP[player.a as usize];
 
-                let mut x1 = (w.x1 - player.x);
-                let mut y1 = (w.y1 - player.y);
-                let mut x2 = (w.x2 - player.x);
-                let mut y2 = (w.y2 - player.y);
+                let mut x1 = w.x1 - player.x;
+                let mut y1 = w.y1 - player.y;
+                let mut x2 = w.x2 - player.x;
+                let mut y2 = w.y2 - player.y;
 
                 match draw_state {
                     DrawState::LowerContour(_, _) | DrawState::UpperContour(_, _) => {
@@ -502,15 +514,15 @@ fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut 
 
                 s.d += dist(player.x, player.y, (w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2);
 
-                let mut wx0 = (x1 * cs - y1 * sn) as i32 / 0xffff;
-                let mut wx1 = (x2 * cs - y2 * sn) as i32 / 0xffff;
-                let mut wx2 = (x1 * cs - y1 * sn) as i32 / 0xffff;
-                let mut wx3 = (x2 * cs - y2 * sn) as i32 / 0xffff;
+                let mut wx0 = (x1 * cs - y1 * sn) / FIXPOINT_BIAS;
+                let mut wx1 = (x2 * cs - y2 * sn) / FIXPOINT_BIAS;
+                let mut wx2 = (x1 * cs - y1 * sn) / FIXPOINT_BIAS;
+                let mut wx3 = (x2 * cs - y2 * sn) / FIXPOINT_BIAS;
 
-                let mut wy0 = (y1 * cs + x1 * sn) as i32 / 0xffff;
-                let mut wy1 = (y2 * cs + x2 * sn) as i32 / 0xffff;
-                let mut wy2 = (y1 * cs + x1 * sn) as i32 / 0xffff;
-                let mut wy3 = (y2 * cs + x2 * sn) as i32 / 0xffff;
+                let mut wy0 = (y1 * cs + x1 * sn) / FIXPOINT_BIAS;
+                let mut wy1 = (y2 * cs + x2 * sn) / FIXPOINT_BIAS;
+                let mut wy2 = (y1 * cs + x1 * sn) / FIXPOINT_BIAS;
+                let mut wy3 = (y2 * cs + x2 * sn) / FIXPOINT_BIAS;
 
                 let mut wz0 = s.z1 - player.z + (player.l * wy0) / 32;
                 let mut wz1 = s.z1 - player.z + (player.l * wy1) / 32;
@@ -535,13 +547,13 @@ fn draw3d(player: &Player, sectors: &mut [Sector], walls: &[Wall], engine: &mut 
                 const SH2: i32 = H / 2;
 
                 // screen pos
-                let sx0 = wx0 * 200 / wy0 + SW2;
-                let sx1 = wx1 * 200 / wy1 + SW2;
+                let sx0 = wx0 * PERSPECTIVE_MUL / wy0 + SW2;
+                let sx1 = wx1 * PERSPECTIVE_MUL / wy1 + SW2;
 
-                let sy0 = wz0 * 200 / wy0 + SH2;
-                let sy1 = wz1 * 200 / wy1 + SH2;
-                let sy2 = wz2 * 200 / wy2 + SH2;
-                let sy3 = wz3 * 200 / wy3 + SH2;
+                let sy0 = wz0 * PERSPECTIVE_MUL / wy0 + SH2;
+                let sy1 = wz1 * PERSPECTIVE_MUL / wy1 + SH2;
+                let sy2 = wz2 * PERSPECTIVE_MUL / wy2 + SH2;
+                let sy3 = wz3 * PERSPECTIVE_MUL / wy3 + SH2;
 
                 draw_wall(
                     sx0,
